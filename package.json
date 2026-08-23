@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Anthropic provider extension for pi, ported from omp (oh-my-pi). Registers a separate `pi-sub-anthropic` provider; pi's built-in anthropic provider is untouched.",
+  "license": "MIT",
   "main": "index.ts",
   "pi": {
     "extensions": ["index.ts"]
@@ -11,20 +12,33 @@
     "type": "git",
     "url": "git+ssh://git@github.com/spksoft/pi-sub-anthropic.git"
   },
+  "homepage": "https://github.com/spksoft/pi-sub-anthropic#readme",
+  "bugs": {
+    "url": "https://github.com/spksoft/pi-sub-anthropic/issues"
+  },
+  "files": [
+    "index.ts",
+    "stream.ts",
+    "oauth.ts",
+    "fingerprint.ts",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node --experimental-strip-types wire-test.ts",
     "test:xxhash": "node --experimental-strip-types verify-xxhash.ts",
     "test:bun": "bun compare-bun.ts",
     "test:all": "npm run test && npm run test:xxhash && npm run test:bun",
     "typecheck": "tsc --noEmit",
-    "link:dev": "node scripts/link-dev.mjs"
+    "link:dev": "node scripts/link-dev.mjs",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run test:xxhash"
   },
   "engines": {
     "node": ">=22.6.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-ai": ">=0.83.0",
-    "@earendil-works/pi-coding-agent": ">=0.83.0"
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
