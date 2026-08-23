@@ -1,0 +1,73 @@
+name: Publish to npm
+
+# Fires only when a GitHub Release is published (including a draft being
+# published). The `created` activity type also fires for drafts being saved,
+# which would publish unfinished work — do not add it.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # npm provenance + trusted publishing (OIDC)
+
+jobs:
+  publish:
+    name: npm publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false # release builds never read a warm cache
+
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 24 can ship older.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      # The release tag is the single source of truth for the published version.
+      # `--no-git-tag-version` writes package.json (and the lockfile's version)
+      # in the runner's checkout only — nothing is committed or tagged back.
+      - name: Take version from the release tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          version="${TAG#v}"
+          node -e 'process.exitCode = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/.test(process.argv[1]) ? 0 : 1' "$version" \
+            || { echo "::error::release tag '$TAG' is not a semver version"; exit 1; }
+          npm version "$version" --no-git-tag-version --allow-same-version
+          # A semver prerelease never becomes `latest`, checkbox or not.
+          if [ "$PRERELEASE" = "true" ] || [ "$version" != "${version%%-*}" ]; then
+            echo "DIST_TAG=next" >> "$GITHUB_ENV"
+          else
+            echo "DIST_TAG=latest" >> "$GITHUB_ENV"
+          fi
+          echo "publishing $version"
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run test
+
+      - run: npm run test:xxhash
+
+      # The tarball must stay at the four runtime sources plus README/LICENSE.
+      # diagnostics/*.ts read ~/.pi/agent/auth.json and must never be published.
+      - name: Published file set must not drift
+        run: |
+          printf '%s\n' LICENSE README.md fingerprint.ts index.ts oauth.ts package.json stream.ts | LC_ALL=C sort > /tmp/expected
+          npm pack --dry-run --json | jq -r '.[0].files[].path' | LC_ALL=C sort > /tmp/actual
+          diff -u /tmp/expected /tmp/actual
+
+      # NODE_AUTH_TOKEN is the fallback: once a trusted publisher is configured
+      # for this package on npmjs.com, the npm CLI prefers OIDC and the secret
+      # can be deleted.
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --tag "$DIST_TAG"

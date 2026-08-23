@@ -13,9 +13,11 @@ plan quota instead of API credits.
 pi's built-in `anthropic` provider is never patched or wrapped. This one keeps
 its own provider id, its own `auth.json` entry, its own env vars.
 
-Read `README.md` before making non-trivial changes — it documents the wire
-fingerprint, the diagnosed "out of extra usage" 400 and its fix, and the known
-latent issues.
+Docs are split by audience: `README.md` is user-facing only (install, use, env
+vars, troubleshooting), `docs/internals.md` holds the design rationale and the
+measured results (wire fingerprint, the diagnosed "out of extra usage" 400 and
+its fix), and `CONTRIBUTING.md` holds setup, tests, hard rules, releases and
+versioning. Read `docs/internals.md` before making non-trivial changes.
 
 ## Layout
 
@@ -29,6 +31,7 @@ latent issues.
 | `compare-bun.ts` / `verify-xxhash.ts` | XXH64 conformance (vs bun native / canonical vectors) |
 | `diagnostics/*.ts` | one-off probes that need a **live** credential; not part of `npm test` |
 | `scripts/link-dev.mjs` | symlinks `node_modules` at an installed pi |
+| `.github/workflows/publish.yml` | release-triggered npm publish; the tag sets the version |
 
 ## Commands
 
@@ -80,8 +83,8 @@ bodies.
 
 ## Documentation
 
-`README.md` is the project's primary artifact and is unusually detailed:
-measured results, tables of alternatives tried, latent issues recorded rather
-than silently fixed. If you change behaviour, update the corresponding README
-section (especially the divergence table and "Known latent issues") in the same
-style — state what was measured, not what is assumed.
+Keep the audience split intact: user-visible behaviour changes go to
+`README.md`, wire/design changes and their measurements to `docs/internals.md`,
+workflow and release changes to `CONTRIBUTING.md`. Match the existing style —
+state what was measured, not what is assumed, and record a latent issue rather
+than silently fixing it.
