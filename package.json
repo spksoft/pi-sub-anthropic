@@ -16,6 +16,9 @@
   "bugs": {
     "url": "https://github.com/spksoft/pi-sub-anthropic/issues"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "index.ts",
     "stream.ts",

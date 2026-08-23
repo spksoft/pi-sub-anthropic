@@ -149,6 +149,16 @@ marked *pre-release*, **or** a tag carrying a semver prerelease suffix
 (`v1.0.0-rc.1`), goes to `next` — so a forgotten checkbox cannot move `latest`
 to a release candidate.
 
+`publishConfig.access` is `public` in `package.json` and must stay that way:
+with `--provenance`, npm refuses a **new** package unless access is explicitly
+public (`EUSAGE: Can't generate provenance for new or private package, you must
+set 'access' to public`). Unscoped packages default to public only once they
+exist, which is exactly the case a first release does not satisfy.
+
+A release-triggered run uses the workflow and `package.json` **from the tagged
+commit**, not from `main`. Fixing a release failure therefore means committing
+the fix and cutting a new tag — re-running the failed job replays the old tree.
+
 The file-set gate exists because `files` restricts the tarball to the four
 runtime sources plus `README.md`/`LICENSE`, and the `diagnostics/*.ts` probes
 read `~/.pi/agent/auth.json` — they must never ship. To reproduce the gate, and
