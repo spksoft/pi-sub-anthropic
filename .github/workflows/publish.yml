@@ -58,10 +58,21 @@ jobs:
 
       # The tarball must stay at the four runtime sources plus README/LICENSE.
       # diagnostics/*.ts read ~/.pi/agent/auth.json and must never be published.
+      # `npm pack --json` has shipped both an array and a package-keyed object,
+      # so the shape is normalised here instead of being assumed.
       - name: Published file set must not drift
         run: |
           printf '%s\n' LICENSE README.md fingerprint.ts index.ts oauth.ts package.json stream.ts | LC_ALL=C sort > /tmp/expected
-          npm pack --dry-run --json | jq -r '.[0].files[].path' | LC_ALL=C sort > /tmp/actual
+          npm pack --dry-run --json > /tmp/pack.json
+          node -e '
+            const j = JSON.parse(require("node:fs").readFileSync("/tmp/pack.json", "utf8"));
+            const entry = Array.isArray(j) ? j[0] : (j.files ? j : Object.values(j)[0]);
+            if (!entry || !Array.isArray(entry.files)) {
+              console.error("unrecognised npm pack --json shape: " + JSON.stringify(j).slice(0, 200));
+              process.exit(1);
+            }
+            process.stdout.write(entry.files.map((f) => f.path).join("\n") + "\n");
+          ' | LC_ALL=C sort > /tmp/actual
           diff -u /tmp/expected /tmp/actual
 
       # NODE_AUTH_TOKEN is the fallback: once a trusted publisher is configured

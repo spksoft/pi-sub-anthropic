@@ -147,10 +147,14 @@ read `~/.pi/agent/auth.json` — they must never ship. To reproduce the gate, an
 the runtime check the workflow does not do, locally:
 
 ```bash
-npm pack --dry-run --json | jq -r '.[0].files[].path'   # expect exactly 7
+npm pack --dry-run                                      # expect exactly 7 entries
 npm pack && tar xzf pi-sub-anthropic-*.tgz -C /tmp
 pi -ne -e /tmp/package --list-models pi-sub-anthropic   # 9 models, settings untouched
 ```
+
+Do not parse `npm pack --json` with a fixed shape: npm <= 11 emits an array of
+package objects, npm >= 12 emits an object keyed by package name. The workflow
+normalises both; a `jq '.[0]…'` one-liner breaks the moment CI upgrades npm.
 
 After the first successful publish, add a **trusted publisher** on npmjs.com
 (Settings → Trusted publishing → GitHub Actions, repo `spksoft/pi-sub-anthropic`,
