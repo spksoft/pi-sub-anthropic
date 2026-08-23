@@ -1,5 +1,5 @@
 /**
- * omp-anthropic — Anthropic provider for pi, ported from omp (oh-my-pi).
+ * pi-sub-anthropic — Anthropic provider for pi, ported from omp (oh-my-pi).
  *
  * PORTED CODE. The Anthropic logic here is derived from omp
  * (@oh-my-pi/pi-coding-agent, @oh-my-pi/pi-ai) v17.4.2 — MIT, (c) Mario Zechner,
@@ -7,25 +7,25 @@
  *
  * WHAT IT ENABLES
  * The same Anthropic access omp has, inside pi: logging in with a Claude
- * Pro/Max account (`/login omp-anthropic`) bills requests against that
+ * Pro/Max account (`/login pi-sub-anthropic`) bills requests against that
  * SUBSCRIPTION PLAN QUOTA rather than per-token API credits. That works only
  * because the OAuth request reproduces omp's wire fingerprint byte-for-byte —
  * user-agent, beta profile, system-block layout, 64k output clamp, `_` tool
  * prefix, billing header + cch attestation. Change any of those and the
  * subscription credential stops being honoured.
  *
- * Registers a SEPARATE provider id (`omp-anthropic`) so pi's built-in
+ * Registers a SEPARATE provider id (`pi-sub-anthropic`) so pi's built-in
  * `anthropic` provider is left completely untouched. Existing sessions,
  * models.json entries and `~/.pi/agent/auth.json` credentials keep working
  * exactly as before; this provider stores its own OAuth credential under its
  * own id and can be removed at any time by deleting this directory.
  *
  * USAGE
- *   /login omp-anthropic          # one-time OAuth (Claude Pro/Max subscription)
- *   /model omp-anthropic/claude-opus-4-5
+ *   /login pi-sub-anthropic          # one-time OAuth (Claude Pro/Max subscription)
+ *   /model pi-sub-anthropic/claude-opus-4-5
  *
  *   # or with an API key instead (billed as API credits, not the plan):
- *   OMP_ANTHROPIC_API_KEY=sk-ant-... pi
+ *   PI_SUB_ANTHROPIC_API_KEY=sk-ant-... pi
  *
  * WHY THIS EXISTS
  * omp ships raw .ts under node_modules and targets bun, so a pi extension
@@ -44,10 +44,10 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { loginAnthropic, refreshAnthropicToken, type OmpOAuthCredentials } from "./oauth.ts";
-import { createOmpAnthropicStream } from "./stream.ts";
+import { loginAnthropic, refreshAnthropicToken, type PiSubOAuthCredentials } from "./oauth.ts";
+import { createPiSubAnthropicStream } from "./stream.ts";
 
-const PROVIDER_ID = "omp-anthropic";
+const PROVIDER_ID = "pi-sub-anthropic";
 const BASE_URL = "https://api.anthropic.com";
 
 type ModelSpec = {
@@ -61,7 +61,7 @@ type ModelSpec = {
 
 /**
  * Catalog mirrors pi's own models-store.json for the anthropic provider, so
- * `/model omp-anthropic/<id>` offers the same set you already have.
+ * `/model pi-sub-anthropic/<id>` offers the same set you already have.
  * `maxTokens` stays at the true model ceiling — the OAuth 64k clamp is applied
  * per-request in stream.ts, exactly as omp does it, so API-key users keep the
  * full ceiling.
@@ -69,7 +69,7 @@ type ModelSpec = {
 const MODELS: ModelSpec[] = [
 	{
 		id: "claude-opus-5",
-		name: "Claude Opus 5 (omp)",
+		name: "Claude Opus 5 (pi-sub)",
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -77,7 +77,7 @@ const MODELS: ModelSpec[] = [
 	},
 	{
 		id: "claude-opus-4-8",
-		name: "Claude Opus 4.8 (omp)",
+		name: "Claude Opus 4.8 (pi-sub)",
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -85,7 +85,7 @@ const MODELS: ModelSpec[] = [
 	},
 	{
 		id: "claude-opus-4-7",
-		name: "Claude Opus 4.7 (omp)",
+		name: "Claude Opus 4.7 (pi-sub)",
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -93,7 +93,7 @@ const MODELS: ModelSpec[] = [
 	},
 	{
 		id: "claude-opus-4-6",
-		name: "Claude Opus 4.6 (omp)",
+		name: "Claude Opus 4.6 (pi-sub)",
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -101,7 +101,7 @@ const MODELS: ModelSpec[] = [
 	},
 	{
 		id: "claude-opus-4-5",
-		name: "Claude Opus 4.5 (omp)",
+		name: "Claude Opus 4.5 (pi-sub)",
 		contextWindow: 200000,
 		maxTokens: 64000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -109,7 +109,7 @@ const MODELS: ModelSpec[] = [
 	},
 	{
 		id: "claude-sonnet-5",
-		name: "Claude Sonnet 5 (omp)",
+		name: "Claude Sonnet 5 (pi-sub)",
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
@@ -117,7 +117,7 @@ const MODELS: ModelSpec[] = [
 	},
 	{
 		id: "claude-sonnet-4-6",
-		name: "Claude Sonnet 4.6 (omp)",
+		name: "Claude Sonnet 4.6 (pi-sub)",
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
@@ -125,7 +125,7 @@ const MODELS: ModelSpec[] = [
 	},
 	{
 		id: "claude-sonnet-4-5",
-		name: "Claude Sonnet 4.5 (omp)",
+		name: "Claude Sonnet 4.5 (pi-sub)",
 		contextWindow: 1000000,
 		maxTokens: 64000,
 		cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
@@ -133,7 +133,7 @@ const MODELS: ModelSpec[] = [
 	},
 	{
 		id: "claude-haiku-4-5",
-		name: "Claude Haiku 4.5 (omp)",
+		name: "Claude Haiku 4.5 (pi-sub)",
 		contextWindow: 200000,
 		maxTokens: 64000,
 		cost: { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
@@ -142,25 +142,25 @@ const MODELS: ModelSpec[] = [
 ];
 
 export default function (pi: ExtensionAPI) {
-	const debug = process.env.OMP_ANTHROPIC_DEBUG === "1";
-	const extraBetas = (process.env.OMP_ANTHROPIC_EXTRA_BETAS ?? "")
+	const debug = process.env.PI_SUB_ANTHROPIC_DEBUG === "1";
+	const extraBetas = (process.env.PI_SUB_ANTHROPIC_EXTRA_BETAS ?? "")
 		.split(",")
 		.map((s) => s.trim())
 		.filter(Boolean);
 
 	pi.registerProvider(PROVIDER_ID, {
-		name: "Anthropic (omp port)",
+		name: "Anthropic Subscription (pi-sub)",
 		baseUrl: BASE_URL,
 		api: "anthropic-messages",
 		// Falls back to an API key when no OAuth credential is stored.
-		apiKey: "$OMP_ANTHROPIC_API_KEY",
-		streamSimple: createOmpAnthropicStream({ extraBetas, debug }),
+		apiKey: "$PI_SUB_ANTHROPIC_API_KEY",
+		streamSimple: createPiSubAnthropicStream({ extraBetas, debug }),
 
 		oauth: {
-			name: "Anthropic omp port (Claude Pro/Max)",
+			name: "Anthropic Subscription (Claude Pro/Max)",
 			login: loginAnthropic,
 			refreshToken: (credentials) =>
-				refreshAnthropicToken(credentials as OmpOAuthCredentials),
+				refreshAnthropicToken(credentials as PiSubOAuthCredentials),
 			getApiKey: (credentials) => credentials.access,
 		},
 
@@ -180,7 +180,7 @@ export default function (pi: ExtensionAPI) {
 
 	if (debug) {
 		process.stderr.write(
-			`[omp-anthropic] registered provider "${PROVIDER_ID}" with ${MODELS.length} models\n`,
+			`[pi-sub-anthropic] registered provider "${PROVIDER_ID}" with ${MODELS.length} models\n`,
 		);
 	}
 }

@@ -1,4 +1,4 @@
-# omp-anthropic
+# pi-sub-anthropic
 
 An Anthropic provider for **pi** (`@earendil-works/pi-coding-agent`), ported from
 **omp** (`@oh-my-pi/pi-coding-agent`, the oh-my-pi fork) at version 17.4.2.
@@ -10,18 +10,18 @@ port: pi's built-in Anthropic provider speaks a different wire dialect, and this
 one reproduces omp's byte-for-byte, so a subscription login is accepted the same
 way it is in omp.
 
-It registers a **separate provider id**, `omp-anthropic`. pi's built-in `anthropic`
+It registers a **separate provider id**, `pi-sub-anthropic`. pi's built-in `anthropic`
 provider is not patched, wrapped or monkeyed with: your existing sessions, model
 entries and stored credentials keep working exactly as before, and this provider
-keeps its own OAuth credential under its own id. Deleting the directory and the
-one settings line removes it completely.
+keeps its own OAuth credential under its own id. `pi remove <source>` — or
+dropping the one settings line — removes it completely.
 
 Zero runtime npm dependencies. The Messages API is spoken directly over `fetch`,
 and the sources run under `node --experimental-strip-types` with no build step.
 
 ## Subscription quota vs API credits
 
-| | `/login omp-anthropic` (OAuth) | `OMP_ANTHROPIC_API_KEY` |
+| | `/login pi-sub-anthropic` (OAuth) | `PI_SUB_ANTHROPIC_API_KEY` |
 |---|---|---|
 | Credential | `sk-ant-oat…` subscription token | `sk-ant-api…` key |
 | Billed to | **your Claude Pro/Max plan quota** | per-token API credits |
@@ -60,16 +60,60 @@ Any OS node runs on. The `X-Stainless-OS: Linux` header in `fingerprint.ts` is a
 
 ## Install
 
-Clone it anywhere, then pick one of two setup paths.
+Three routes, all ending with pi loading `index.ts` and registering the
+`pi-sub-anthropic` provider. Pick by how you want updates delivered.
 
-**A. Normal install** — needed if you want to type-check:
+**A. From git — pi's package manager does everything.** pi clones the repo, runs
+`npm install` in the clone, and records the source in `packages[]`:
 
 ```bash
-npm install
+pi install git:git@github.com:spksoft/pi-sub-anthropic.git   # SSH clone
+pi install git:github.com/spksoft/pi-sub-anthropic           # HTTPS clone (public access)
+pi install git:git@github.com:spksoft/pi-sub-anthropic.git@v0.1.0   # pinned tag/commit
 ```
 
-**B. Zero-install** — if pi is already installed globally, link against its
-`node_modules` instead of downloading a second copy:
+The clone lands in `~/.pi/agent/git/github.com/spksoft/pi-sub-anthropic`. Add
+`-l` to install into the current project (`.pi/settings.json`) instead of your
+user settings. Later:
+
+```bash
+pi update --extensions        # pull package updates, reconcile pinned refs
+pi remove git:git@github.com:spksoft/pi-sub-anthropic.git
+```
+
+**B. From a local clone** — the route to use if you intend to edit the code:
+
+```bash
+git clone git@github.com:spksoft/pi-sub-anthropic.git
+cd pi-sub-anthropic
+npm install                   # or: npm run link:dev  (see Dependencies)
+pi install "$PWD"             # absolute path recorded in packages[]; nothing is copied
+```
+
+**C. Manual settings entry** — same effect as B, without the package manager.
+Add the absolute path to `~/.pi/agent/settings.json`:
+
+```json
+{
+  "extensions": ["/absolute/path/to/pi-sub-anthropic"]
+}
+```
+
+`extensions[]` is what lets pi load an extension from outside
+`~/.pi/agent/extensions/`. Entries there are loaded but do **not** show up in
+`pi list`, which reports `packages[]` only. Delete the line to disable; no other
+pi state is touched.
+
+A directory install resolves its entry point through `package.json` →
+`pi.extensions` (`["index.ts"]` here), falling back to a root `index.ts`. Rename
+that file and nothing loads.
+
+### Dependencies
+
+Nothing at runtime — the Messages API is spoken over `fetch`. `npm install` only
+provides `typescript` and `@types/node` for `npm run typecheck` (route A runs it
+for you). If pi is already installed globally, link against its `node_modules`
+instead of downloading a second copy:
 
 ```bash
 npm run link:dev
@@ -84,26 +128,48 @@ If auto-detection fails, point it at the package yourself:
 npm run link:dev -- /path/to/@earendil-works/pi-coding-agent
 ```
 
-Then tell pi to load the extension, by absolute path, in `~/.pi/agent/settings.json`:
+### Verify
 
-```json
-{
-  "extensions": ["/absolute/path/to/pi-sub-anthropic"]
-}
+```bash
+pi list                                      # routes A/B: the package is listed
+pi --list-models pi-sub-anthropic            # 9 models across the catalog
 ```
 
-That entry is what lets pi load an extension from outside `~/.pi/agent/extensions/`.
-Remove the line to disable it; no other pi state is touched.
+`pi auth check --provider pi-sub-anthropic` is **not** a useful probe: those
+subcommands resolve providers without loading extensions, so they answer
+`provider_not_found` even when the provider is installed and logged in. Check
+`~/.pi/agent/auth.json` for a `pi-sub-anthropic` key instead, or just run a
+prompt.
+
+pi loads the extension with the node that runs pi, not the `node` first on your
+`PATH`. That interpreter must be >= 22.6 or type stripping fails at load.
 
 ## Use
 
 ```bash
-/login omp-anthropic                      # OAuth (Claude Pro/Max), separate credential
-/model omp-anthropic/claude-opus-4-5
-
-# or with an API key instead:
-OMP_ANTHROPIC_API_KEY=sk-ant-... pi
+/login pi-sub-anthropic                      # OAuth (Claude Pro/Max), separate credential
+/model pi-sub-anthropic/claude-opus-5
 ```
+
+Non-interactively, or to skip the picker:
+
+```bash
+pi --provider pi-sub-anthropic --model claude-opus-5
+PI_SUB_ANTHROPIC_API_KEY=sk-ant-... pi       # API key instead of the subscription
+```
+
+To make it the default, in `~/.pi/agent/settings.json`:
+
+```json
+{
+  "defaultProvider": "pi-sub-anthropic",
+  "defaultModel": "claude-opus-5"
+}
+```
+
+The OAuth credential is stored under the provider id in
+`~/.pi/agent/auth.json`, so it never collides with pi's built-in `anthropic`
+entry. Renaming the provider id orphans it — log in again, or move the key.
 
 Nine models are registered, mirroring pi's own Anthropic catalog: Opus 5 / 4.8 /
 4.7 / 4.6 / 4.5, Sonnet 5 / 4.6 / 4.5, Haiku 4.5.
@@ -112,9 +178,10 @@ Env vars:
 
 | var | effect |
 |---|---|
-| `OMP_ANTHROPIC_API_KEY` | API-key fallback when no OAuth credential is stored |
-| `OMP_ANTHROPIC_DEBUG=1` | print resolved URL/headers/max_tokens to stderr (auth redacted) |
-| `OMP_ANTHROPIC_EXTRA_BETAS` | comma-separated extra `anthropic-beta` values |
+| `PI_SUB_ANTHROPIC_API_KEY` | API-key fallback when no OAuth credential is stored |
+| `PI_SUB_ANTHROPIC_DEBUG=1` | print resolved URL/headers/max_tokens to stderr (auth redacted) |
+| `PI_SUB_ANTHROPIC_EXTRA_BETAS` | comma-separated extra `anthropic-beta` values |
+| `PI_SUB_ANTHROPIC_DUMP_BODY` | path to write the outgoing request body to (debug builds of a failing request) |
 
 ## What this changes vs pi 0.83.0's built-in provider
 
@@ -298,7 +365,7 @@ they are recorded rather than silently "fixed":
 
 | file | role |
 |---|---|
-| `index.ts` | entry point; `pi.registerProvider("omp-anthropic", …)` + model catalog |
+| `index.ts` | entry point; `pi.registerProvider("pi-sub-anthropic", …)` + model catalog |
 | `stream.ts` | Messages API streaming, headers, clamp, tool prefixing, SSE parsing |
 | `fingerprint.ts` | Cowork constants, beta profiles, billing header, XXH64, cch patch |
 | `oauth.ts` | OAuth login/refresh + bootstrap identity |
@@ -307,15 +374,18 @@ they are recorded rather than silently "fixed":
 | `verify-xxhash.ts` | bun-free canonical XXH64 vectors |
 | `scripts/link-dev.mjs` | locates an installed pi and symlinks `node_modules` at it |
 | `tsconfig.json` | strict type-check config (`npm run typecheck`) |
+| `package.json` | npm metadata + `pi.extensions` manifest pi reads to find `index.ts` |
+| `diagnostics/*.ts` | live-credential probes used to diagnose the extra-usage 400 |
 
 ## Status and limits
 
 - **Exercised:** loads in pi and registers 9 models; the full outgoing payload is
   asserted against a mock server; the XXH64 port is byte-identical to bun's.
-- **Not verified against the live Anthropic API.** No real request has ever been
-  sent through this provider. The mock server is the only thing that has
-  exercised it. Run `/login omp-anthropic` and then a real prompt to close that
-  gap — and expect to find things the mock could not.
+- **Verified live on a Claude subscription credential.** OAuth login, streaming
+  replies and tool calls all round-trip against `api.anthropic.com` on Haiku 4.5,
+  Sonnet 4.5/5, Opus 4.5 and Opus 5, with the system-prompt relocation active
+  (see [Known latent issues](#known-latent-issues)). Non-interactive check:
+  `pi -p --provider pi-sub-anthropic --model claude-sonnet-5 "hi"`.
 - **Ported subset:** streaming, OAuth, fingerprint, tool naming, thinking budgets.
   **Not ported:** Bedrock/Vertex/Copilot signing routes, fast-mode fallback,
   image resizing (`Bun.Image`), server-side fallbacks, structured outputs.

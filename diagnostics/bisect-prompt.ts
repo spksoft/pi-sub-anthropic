@@ -14,7 +14,7 @@ import { buildCoworkBetas, coworkHeaders, coworkUserAgent, wrapFetchForCch } fro
 
 const cred = JSON.parse(
 	fs.readFileSync(path.join(os.homedir(), ".pi", "agent", "auth.json"), "utf8"),
-)["omp-anthropic"];
+)["pi-sub-anthropic"];
 const token: string = cred.access;
 const betas = [...buildCoworkBetas(true, true)].join(",");
 const doFetch = wrapFetchForCch(fetch);

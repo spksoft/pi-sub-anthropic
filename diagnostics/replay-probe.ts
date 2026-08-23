@@ -2,7 +2,7 @@
  * Replays the EXACT body that the provider sent and got a 400 for, then bisects
  * it field by field to find the one Anthropic rejects.
  *
- * Reads /tmp/fail-body.json (written by OMP_ANTHROPIC_DUMP_BODY).
+ * Reads /tmp/fail-body.json (written by PI_SUB_ANTHROPIC_DUMP_BODY).
  * Run: node --experimental-strip-types replay-probe.ts
  */
 
@@ -19,7 +19,7 @@ import {
 
 const cred = JSON.parse(
 	fs.readFileSync(path.join(os.homedir(), ".pi", "agent", "auth.json"), "utf8"),
-)["omp-anthropic"];
+)["pi-sub-anthropic"];
 const token: string = cred.access;
 const betas = [...buildCoworkBetas(true, true)].join(",");
 const doFetch = wrapFetchForCch(fetch);

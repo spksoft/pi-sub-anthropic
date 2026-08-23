@@ -1,5 +1,5 @@
 /**
- * Wire-level test for the omp-anthropic port.
+ * Wire-level test for the pi-sub-anthropic port.
  *
  * Spins up a local HTTP server that impersonates the Anthropic Messages API,
  * points the ported stream function at it with a fake OAuth token, and asserts
@@ -11,7 +11,7 @@
  */
 
 import http from "node:http";
-import { createOmpAnthropicStream } from "./stream.ts";
+import { createPiSubAnthropicStream } from "./stream.ts";
 import { CLAUDE_BILLING_HEADER_PREFIX, xxHash64 } from "./fingerprint.ts";
 
 let captured: { headers: Record<string, string>; body: any; rawBody: string } | null = null;
@@ -53,9 +53,9 @@ const port = (server.address() as any).port;
 
 const model: any = {
 	id: "claude-opus-4-5",
-	name: "Claude Opus 4.5 (omp)",
+	name: "Claude Opus 4.5 (pi-sub)",
 	api: "anthropic-messages",
-	provider: "omp-anthropic",
+	provider: "pi-sub-anthropic",
 	baseUrl: `http://127.0.0.1:${port}`,
 	reasoning: true,
 	input: ["text", "image"],
@@ -81,7 +81,7 @@ const context: any = {
 	],
 };
 
-const stream = createOmpAnthropicStream()(model, context, {
+const stream = createPiSubAnthropicStream()(model, context, {
 	apiKey: "sk-ant-oat01-FAKE-TOKEN-FOR-WIRE-TEST",
 	reasoning: "high",
 } as any);
@@ -193,7 +193,7 @@ console.log("\n=== HEADER ENFORCEMENT (model.headers must not clobber fingerprin
 			"X-Custom-Allowed": "keepme",
 		},
 	};
-	const s2 = createOmpAnthropicStream()(evilModel as any, context, {
+	const s2 = createPiSubAnthropicStream()(evilModel as any, context, {
 		apiKey: "sk-ant-oat01-FAKE",
 		reasoning: "high",
 	} as any);
@@ -231,7 +231,7 @@ console.log("\n=== UNKNOWN stop_reason MUST NOT BECOME A SUCCESSFUL done ===");
 	await new Promise<void>((r) => srv3.listen(0, "127.0.0.1", () => r()));
 	const p3 = (srv3.address() as any).port;
 
-	const s3 = createOmpAnthropicStream()(
+	const s3 = createPiSubAnthropicStream()(
 		{ ...model, baseUrl: `http://127.0.0.1:${p3}` } as any,
 		context,
 		{ apiKey: "sk-ant-oat01-FAKE" } as any,
@@ -261,7 +261,7 @@ console.log("\n=== API-KEY PATH IS UNAFFECTED BY THE OAUTH RELOCATION ===");
 	await new Promise<void>((r) => srv4.listen(0, "127.0.0.1", () => r()));
 	const p4 = (srv4.address() as any).port;
 
-	const s4 = createOmpAnthropicStream()(
+	const s4 = createPiSubAnthropicStream()(
 		{ ...model, baseUrl: `http://127.0.0.1:${p4}` } as any,
 		context,
 		{ apiKey: "sk-ant-api03-NOT-AN-OAUTH-TOKEN" } as any,

@@ -2,10 +2,14 @@
   "name": "pi-sub-anthropic",
   "version": "0.1.0",
   "type": "module",
-  "description": "Anthropic provider extension for pi, ported from omp (oh-my-pi). Registers a separate `omp-anthropic` provider; pi's built-in anthropic provider is untouched.",
+  "description": "Anthropic provider extension for pi, ported from omp (oh-my-pi). Registers a separate `pi-sub-anthropic` provider; pi's built-in anthropic provider is untouched.",
   "main": "index.ts",
   "pi": {
-    "extension": "index.ts"
+    "extensions": ["index.ts"]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/spksoft/pi-sub-anthropic.git"
   },
   "scripts": {
     "test": "node --experimental-strip-types wire-test.ts",
@@ -28,6 +32,7 @@
   },
   "keywords": [
     "pi",
+    "pi-package",
     "pi-extension",
     "anthropic",
     "omp",

@@ -18,7 +18,7 @@ import { coworkHeaders, wrapFetchForCch } from "./fingerprint.ts";
 
 const cred = JSON.parse(
 	fs.readFileSync(path.join(os.homedir(), ".pi", "agent", "auth.json"), "utf8"),
-)["omp-anthropic"];
+)["pi-sub-anthropic"];
 const cap = JSON.parse(fs.readFileSync("/tmp/omp2.json", "utf8"));
 const mine = JSON.parse(fs.readFileSync("/tmp/fail-body.json", "utf8"));
 const doFetch = wrapFetchForCch(fetch);

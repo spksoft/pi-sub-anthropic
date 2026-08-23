@@ -376,7 +376,7 @@ async function* iterateSse(
 	}
 }
 
-export interface OmpStreamConfig {
+export interface PiSubStreamConfig {
 	/** Extra anthropic-beta values to advertise. */
 	extraBetas?: string[];
 	/** Override the Cowork user-agent (debugging only). */
@@ -385,8 +385,8 @@ export interface OmpStreamConfig {
 	debug?: boolean;
 }
 
-export function createOmpAnthropicStream(config: OmpStreamConfig = {}) {
-	return function streamOmpAnthropic(
+export function createPiSubAnthropicStream(config: PiSubStreamConfig = {}) {
+	return function streamPiSubAnthropic(
 		model: Model<any>,
 		context: Context,
 		options?: SimpleStreamOptions,
@@ -504,14 +504,14 @@ export function createOmpAnthropicStream(config: OmpStreamConfig = {}) {
 				if (config.debug) {
 					const redacted = { ...headers, Authorization: "Bearer sk-ant-oat***" };
 					process.stderr.write(
-						`[omp-anthropic] POST ${url}\nheaders=${JSON.stringify(redacted, null, 2)}\nmax_tokens=${maxTokens} oauth=${oauth} betas=${betaHeader}\n`,
+						`[pi-sub-anthropic] POST ${url}\nheaders=${JSON.stringify(redacted, null, 2)}\nmax_tokens=${maxTokens} oauth=${oauth} betas=${betaHeader}\n`,
 					);
 					// Full body dump for diffing against a known-good request.
 					// Credentials live in headers, not the body, so this is safe.
-					if (process.env.OMP_ANTHROPIC_DUMP_BODY) {
-						fs.writeFileSync(process.env.OMP_ANTHROPIC_DUMP_BODY, serialized);
+					if (process.env.PI_SUB_ANTHROPIC_DUMP_BODY) {
+						fs.writeFileSync(process.env.PI_SUB_ANTHROPIC_DUMP_BODY, serialized);
 						process.stderr.write(
-							`[omp-anthropic] body -> ${process.env.OMP_ANTHROPIC_DUMP_BODY} (${serialized.length} bytes, ${(body.tools as unknown[])?.length ?? 0} tools)\n`,
+							`[pi-sub-anthropic] body -> ${process.env.PI_SUB_ANTHROPIC_DUMP_BODY} (${serialized.length} bytes, ${(body.tools as unknown[])?.length ?? 0} tools)\n`,
 						);
 					}
 				}

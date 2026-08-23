@@ -23,7 +23,7 @@ import { buildCoworkBetas, coworkHeaders, coworkUserAgent, wrapFetchForCch } fro
 
 const cred = JSON.parse(
 	fs.readFileSync(path.join(os.homedir(), ".pi", "agent", "auth.json"), "utf8"),
-)["omp-anthropic"];
+)["pi-sub-anthropic"];
 const token: string = cred.access;
 const doFetch = wrapFetchForCch(fetch);
 const original = JSON.parse(fs.readFileSync("/tmp/fail-body.json", "utf8"));

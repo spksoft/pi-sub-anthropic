@@ -26,7 +26,7 @@ import {
 } from "./fingerprint.ts";
 
 const authPath = path.join(os.homedir(), ".pi", "agent", "auth.json");
-const cred = JSON.parse(fs.readFileSync(authPath, "utf8"))["omp-anthropic"];
+const cred = JSON.parse(fs.readFileSync(authPath, "utf8"))["pi-sub-anthropic"];
 const token: string = cred.access;
 const doFetch = wrapFetchForCch(fetch);
 const betas = [...buildCoworkBetas(true, true)].join(",");

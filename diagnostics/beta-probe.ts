@@ -25,9 +25,9 @@ import nodeCrypto from "node:crypto";
 
 const authPath = path.join(os.homedir(), ".pi", "agent", "auth.json");
 const auth = JSON.parse(fs.readFileSync(authPath, "utf8"));
-const cred = auth["omp-anthropic"] ?? auth.anthropic;
+const cred = auth["pi-sub-anthropic"] ?? auth.anthropic;
 if (!cred?.access) {
-	console.error("No omp-anthropic credential found. Run: /login omp-anthropic");
+	console.error("No pi-sub-anthropic credential found. Run: /login pi-sub-anthropic");
 	process.exit(1);
 }
 const token: string = cred.access;

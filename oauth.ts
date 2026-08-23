@@ -51,7 +51,7 @@ export interface AnthropicIdentity {
 }
 
 /** OAuthCredentials plus the identity fields omp lifts off the token response. */
-export type OmpOAuthCredentials = OAuthCredentials & AnthropicIdentity;
+export type PiSubOAuthCredentials = OAuthCredentials & AnthropicIdentity;
 
 interface AnthropicTokenResponse {
 	access_token: string;
@@ -191,7 +191,7 @@ function parseAuthorizationInput(input: string): { code?: string; state?: string
  * Runs a localhost callback server, races it against a manual paste prompt,
  * and exchanges whichever authorization code arrives first.
  */
-export async function loginAnthropic(callbacks: OAuthLoginCallbacks): Promise<OmpOAuthCredentials> {
+export async function loginAnthropic(callbacks: OAuthLoginCallbacks): Promise<PiSubOAuthCredentials> {
 	const { verifier, challenge } = generatePKCE();
 	const state = nodeCrypto.randomUUID();
 	const redirectUri = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
@@ -277,8 +277,8 @@ export async function loginAnthropic(callbacks: OAuthLoginCallbacks): Promise<Om
 }
 
 export async function refreshAnthropicToken(
-	credentials: OmpOAuthCredentials,
-): Promise<OmpOAuthCredentials> {
+	credentials: PiSubOAuthCredentials,
+): Promise<PiSubOAuthCredentials> {
 	const responseBody = await postJson(TOKEN_URL, {
 		grant_type: "refresh_token",
 		client_id: CLIENT_ID,
