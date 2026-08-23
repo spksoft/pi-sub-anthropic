@@ -105,29 +105,31 @@ bodies.
 
 ## Releasing
 
-The [pi package gallery](https://pi.dev/packages) is an index of npm, not a
-submission queue: publish with the `pi-package` keyword (already in
-`package.json`) and the listing appears by itself, using `repository` for its
-repo link and `pi install npm:pi-sub-anthropic` as its install command.
+The package is live at https://www.npmjs.com/package/pi-sub-anthropic and listed
+at https://pi.dev/packages/pi-sub-anthropic. That gallery is an index of npm, not
+a submission queue: the `pi-package` keyword in `package.json` is what put it
+there, and it renders `repository` as its repo link with
+`pi install npm:pi-sub-anthropic` as its install command.
 
 Publishing is a GitHub Actions job, not a laptop command:
 `.github/workflows/publish.yml` runs on `release: [published]`.
 
-One-time setup — a **granular** access token with publish rights. Classic tokens
-were revoked registry-wide on 9 Dec 2025, and granular write tokens expire after
-at most 90 days, so this credential is temporary by design:
+Credential setup — a **granular** access token with publish rights. Classic
+tokens were revoked registry-wide on 9 Dec 2025, and granular write tokens
+expire after at most 90 days, so this credential is temporary by design:
 
 ```bash
 npm login                                   # 2-hour session, only to authorise the next command
 npm token create --name pi-sub-anthropic-ci \
-  --packages-all --packages-and-scopes-permission read-write \
+  --packages pi-sub-anthropic --packages-and-scopes-permission read-write \
   --orgs-permission no-access --expires 90 --bypass-2fa
 gh secret set NPM_TOKEN                     # paste the token
 ```
 
-`--packages-all` is required only because the package does not exist yet; narrow
-the token to `pi-sub-anthropic` after the first publish. `--bypass-2fa` is needed
-only if the account or package enforces 2FA on publish.
+Scope it to the single package — `--packages-all` was only needed for the first
+publish, when the package did not exist to be named. `--bypass-2fa` is needed
+only if the account or package enforces 2FA on publish, and it is on a
+deprecation clock (see below).
 
 Then every release is a single command — **the tag decides the published
 version**, so `package.json` never has to be bumped by hand:
@@ -174,7 +176,7 @@ Do not parse `npm pack --json` with a fixed shape: npm <= 11 emits an array of
 package objects, npm >= 12 emits an object keyed by package name. The workflow
 normalises both; a `jq '.[0]…'` one-liner breaks the moment CI upgrades npm.
 
-### Move to trusted publishing straight after the first publish
+### Move to trusted publishing — now actionable
 
 Token publishing is on a deprecation clock. Since 31 Jul 2026 a bypass-2FA
 granular token can no longer perform account, org or package **management** —
@@ -183,24 +185,36 @@ including configuring trusted publishing itself. npm is targeting **January
 only to read private packages and to `npm stage publish` for a maintainer to
 approve with 2FA.
 
-The ordering that follows from this:
+The first publish had to be token-based because trusted publishing and staged
+publishing both require the package to already exist. It exists now, so:
 
-1. First publish must be token-based — trusted publishing and staged publishing
-   both require the package to already exist.
-2. Then configure the trusted publisher **interactively** (npmjs.com → package
+1. Configure the trusted publisher **interactively** (npmjs.com → package
    Settings → Trusted publishing → GitHub Actions, org/user `spksoft`, repo
    `pi-sub-anthropic`, workflow filename `publish.yml`). The CI token cannot do
    this, by design.
-3. Delete the `NPM_TOKEN` secret. The workflow already grants `id-token: write`,
-   the npm CLI prefers OIDC over `NODE_AUTH_TOKEN`, and provenance becomes
-   automatic for a public repo publishing a public package, so `--provenance`
-   turns into a no-op rather than a requirement.
+2. Cut one release to confirm OIDC works, then delete the `NPM_TOKEN` secret.
+   The workflow already grants `id-token: write`, the npm CLI prefers OIDC over
+   `NODE_AUTH_TOKEN`, and provenance becomes automatic for a public repo
+   publishing a public package, so `--provenance` turns into a no-op rather than
+   a requirement.
+3. Optional hardening: package Settings → Publishing access → *Require
+   two-factor authentication and disallow tokens*, and/or a stage-only trusted
+   publisher so each CI publish waits for a 2FA approval.
 
 Two exact-match traps: `repository.url` in `package.json` must match the GitHub
 repo (hence the `git+https://github.com/spksoft/pi-sub-anthropic.git` form, not
 the SSH one), and the configured workflow filename is case-sensitive including
 the `.yml`. npm does not validate a trusted-publisher configuration when you save
 it — a mismatch only surfaces as `ENEEDAUTH` on the next publish.
+
+One more packaging trap, measured against the published 0.1.4 tarball: npm and
+the pi gallery rewrite **relative** links in the rendered README to
+`cdn.jsdelivr.net/npm/pi-sub-anthropic@<version>/<path>`, which only resolves
+for files inside the tarball. `LICENSE` and `README.md` return 200 there;
+`CONTRIBUTING.md` and `docs/internals.md` returned 404 because `files` excludes
+them. README therefore links to those two with absolute
+`github.com/spksoft/pi-sub-anthropic/blob/main/...` URLs. Keep it that way, or
+ship the docs in `files` and update the 7-entry gate.
 
 ## Versioning
 

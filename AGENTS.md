@@ -13,6 +13,13 @@ plan quota instead of API credits.
 pi's built-in `anthropic` provider is never patched or wrapped. This one keeps
 its own provider id, its own `auth.json` entry, its own env vars.
 
+Published on npm as `pi-sub-anthropic` (`pi install npm:pi-sub-anthropic`) and
+listed at https://pi.dev/packages/pi-sub-anthropic. Releases are cut by tagging;
+the tag sets the published version, so `package.json`'s version is cosmetic.
+README links to `CONTRIBUTING.md` and `docs/internals.md` with absolute GitHub
+URLs on purpose: npm rewrites relative links against the tarball, which excludes
+both files.
+
 Docs are split by audience: `README.md` is user-facing only (install, use, env
 vars, troubleshooting), `docs/internals.md` holds the design rationale and the
 measured results (wire fingerprint, the diagnosed "out of extra usage" 400 and

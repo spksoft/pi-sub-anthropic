@@ -47,10 +47,20 @@ pi — not necessarily the `node` first on your `PATH` — and that interpreter 
 be >= 22.6 or type stripping fails at load.
 
 ```bash
+pi install npm:pi-sub-anthropic          # tracks latest
+pi install npm:pi-sub-anthropic@0.1.4    # pinned; pinned specs are skipped by pi update
+```
+
+Published from CI with [npm provenance](https://www.npmjs.com/package/pi-sub-anthropic),
+so the tarball is attestably built from this repository. Straight from git works
+too, if you would rather track the default branch:
+
+```bash
 pi install git:github.com/spksoft/pi-sub-anthropic
 ```
 
-Or by hand, adding the absolute path to `~/.pi/agent/settings.json`:
+Or by hand, adding the absolute path to a local copy in
+`~/.pi/agent/settings.json`:
 
 ```json
 {
@@ -61,7 +71,8 @@ Or by hand, adding the absolute path to `~/.pi/agent/settings.json`:
 No runtime npm dependencies and no build step: the Messages API is spoken
 directly over `fetch`, from TypeScript sources pi type-strips at load.
 
-Working on the code instead? See [CONTRIBUTING.md](CONTRIBUTING.md).
+Working on the code instead? See
+[CONTRIBUTING.md](https://github.com/spksoft/pi-sub-anthropic/blob/main/CONTRIBUTING.md).
 
 ## Use
 
@@ -101,7 +112,8 @@ Nine models are registered, mirroring pi's own Anthropic catalog: Opus 5 / 4.8 /
 | System prompt | relocated to a user turn | left in `system` |
 
 Both paths work; they differ in what pays for the tokens. Why the OAuth column
-looks like that is documented in [docs/internals.md](docs/internals.md).
+looks like that is documented in
+[docs/internals.md](https://github.com/spksoft/pi-sub-anthropic/blob/main/docs/internals.md).
 
 ## Environment variables
 
@@ -130,7 +142,7 @@ still serve their full window; use an API key if you need a beta-gated 1M model.
 
 **Requests started failing after working before.** The fingerprint is pinned and
 does not self-update. Check `PI_SUB_ANTHROPIC_DEBUG=1` output, then the
-[upstream constants](docs/internals.md#why-the-fingerprint-exists).
+[upstream constants](https://github.com/spksoft/pi-sub-anthropic/blob/main/docs/internals.md#why-the-fingerprint-exists).
 
 **Rate limits.** Plan limits are Anthropic's, not this extension's. Hitting your
 Pro/Max ceiling throttles exactly as it would in Claude Code.
@@ -138,7 +150,7 @@ Pro/Max ceiling throttles exactly as it would in Claude Code.
 ## Uninstall
 
 ```bash
-pi remove git:github.com/spksoft/pi-sub-anthropic
+pi remove npm:pi-sub-anthropic                        # or the git:/path source you installed
 ```
 
 Or delete the `extensions[]` line. Nothing else in pi is touched; the stored
@@ -150,8 +162,10 @@ credential lives under its own id in `~/.pi/agent/auth.json`.
 
 | | |
 |---|---|
-| How it works, and what was measured | [docs/internals.md](docs/internals.md) |
-| Development, tests, releases | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| How it works, and what was measured | [docs/internals.md](https://github.com/spksoft/pi-sub-anthropic/blob/main/docs/internals.md) |
+| Development, tests, releases | [CONTRIBUTING.md](https://github.com/spksoft/pi-sub-anthropic/blob/main/CONTRIBUTING.md) |
+| Package on npm | https://www.npmjs.com/package/pi-sub-anthropic |
+| Listing in the pi gallery | https://pi.dev/packages/pi-sub-anthropic |
 
 ## Attribution and license
 

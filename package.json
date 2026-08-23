@@ -1,6 +1,6 @@
 {
   "name": "pi-sub-anthropic",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "type": "module",
   "description": "Anthropic provider extension for pi, ported from omp (oh-my-pi). Registers a separate `pi-sub-anthropic` provider; pi's built-in anthropic provider is untouched.",
   "license": "MIT",
