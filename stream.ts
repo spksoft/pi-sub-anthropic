@@ -1,0 +1,705 @@
+/**
+ * Anthropic Messages streaming, ported from omp (@oh-my-pi/pi-ai)
+ * `src/providers/anthropic.ts` (~4400 lines) down to the parts a pi extension
+ * needs. Implemented directly against the Messages HTTP API — no @anthropic-ai/sdk
+ * dependency, so this extension installs with zero npm packages.
+ *
+ * Behaviours ported from omp that pi 0.83.0 does NOT do:
+ *   1. max_tokens clamped to 64k on OAuth requests (pi sends model.maxTokens raw)
+ *   2. Cowork user-agent `claude-cli/2.1.220 (external, claude-desktop)`
+ *   3. Cowork system identity ("You are a Claude agent, built on ... Agent SDK")
+ *   4. Billing header + cch attestation as system[0]
+ *   5. Tools prefixed with `_` instead of renamed to Read/Write/Bash/...
+ *   6. Full X-Stainless-* header set, x-client-request-id, keep-alive
+ */
+
+import {
+	type AssistantMessage,
+	type AssistantMessageEventStream,
+	type Context,
+	type ImageContent,
+	type Message,
+	type Model,
+	type SimpleStreamOptions,
+	type StopReason,
+	type TextContent,
+	type ThinkingContent,
+	type Tool,
+	type ToolCall,
+	type ToolResultMessage,
+	calculateCost,
+	createAssistantMessageEventStream,
+} from "@earendil-works/pi-ai";
+import nodeCrypto from "node:crypto";
+import fs from "node:fs";
+import {
+	CLAUDE_CODE_MAX_OUTPUT_TOKENS,
+	applyClaudeToolPrefix,
+	buildBetaHeader,
+	buildCoworkBetas,
+	claudeCodeSystemInstruction,
+	coworkHeaders,
+	coworkUserAgent,
+	createClaudeBillingHeader,
+	generateClaudeCloakingUserId,
+	stripClaudeToolPrefix,
+	wrapFetchForCch,
+} from "./fingerprint.ts";
+
+const ANTHROPIC_VERSION = "2023-06-01";
+
+/**
+ * Headers this provider owns. Model-level headers can add new keys but may not
+ * override these, or the Cowork fingerprint breaks. Ported from omp's
+ * `enforcedHeaderKeys` (anthropic.ts ~line 535).
+ */
+const ENFORCED_HEADER_KEYS = new Set(
+	[
+		...Object.keys(coworkHeaders),
+		"Accept",
+		"Accept-Encoding",
+		"Connection",
+		"Content-Type",
+		"anthropic-version",
+		"anthropic-dangerous-direct-browser-access",
+		"anthropic-beta",
+		"User-Agent",
+		"x-app",
+		"Authorization",
+		"X-Api-Key",
+		"x-client-request-id",
+	].map((k) => k.toLowerCase()),
+);
+
+export function isOAuthToken(apiKey: string): boolean {
+	return apiKey.includes("sk-ant-oat");
+}
+
+function sanitizeSurrogates(text: string): string {
+	return text.replace(/[\uD800-\uDFFF]/g, "\uFFFD");
+}
+
+function normalizeImageMediaType(mimeType: string): string {
+	const normalized = mimeType.trim().toLowerCase();
+	if (normalized === "image/jpg") return "image/jpeg";
+	if (
+		normalized === "image/jpeg" ||
+		normalized === "image/png" ||
+		normalized === "image/gif" ||
+		normalized === "image/webp"
+	) {
+		return normalized;
+	}
+	return "image/png";
+}
+
+function convertContentBlocks(content: (TextContent | ImageContent)[]): unknown {
+	const hasImages = content.some((c) => c.type === "image");
+	if (!hasImages) {
+		return sanitizeSurrogates(content.map((c) => (c as TextContent).text ?? "").join("\n"));
+	}
+	const blocks = content.map((block) =>
+		block.type === "text"
+			? { type: "text" as const, text: sanitizeSurrogates(block.text) }
+			: {
+					type: "image" as const,
+					source: {
+						type: "base64" as const,
+						media_type: normalizeImageMediaType((block as ImageContent).mimeType),
+						data: (block as ImageContent).data,
+					},
+				},
+	);
+	if (!blocks.some((b) => b.type === "text")) {
+		blocks.unshift({ type: "text" as const, text: "(see attached image)" });
+	}
+	return blocks;
+}
+
+/** Ported from omp's convertAnthropicMessages (tool naming differs from pi). */
+function convertMessages(messages: Message[], isOAuth: boolean): unknown[] {
+	const params: any[] = [];
+	const nameFor = (name: string) => (isOAuth ? applyClaudeToolPrefix(name) : name);
+
+	for (let i = 0; i < messages.length; i++) {
+		const msg = messages[i];
+
+		if (msg.role === "user") {
+			if (typeof msg.content === "string") {
+				if (msg.content.trim()) {
+					params.push({ role: "user", content: sanitizeSurrogates(msg.content) });
+				}
+			} else {
+				const blocks = (msg.content as (TextContent | ImageContent)[]).map((item) =>
+					item.type === "text"
+						? { type: "text" as const, text: sanitizeSurrogates(item.text) }
+						: {
+								type: "image" as const,
+								source: {
+									type: "base64" as const,
+									media_type: normalizeImageMediaType(item.mimeType),
+									data: item.data,
+								},
+							},
+				);
+				if (blocks.length > 0) params.push({ role: "user", content: blocks });
+			}
+		} else if (msg.role === "assistant") {
+			const blocks: any[] = [];
+			for (const block of msg.content) {
+				if (block.type === "text" && block.text.trim()) {
+					blocks.push({ type: "text", text: sanitizeSurrogates(block.text) });
+				} else if (block.type === "thinking" && block.thinking.trim()) {
+					const sig = (block as ThinkingContent).thinkingSignature;
+					if (sig) {
+						blocks.push({
+							type: "thinking",
+							thinking: sanitizeSurrogates(block.thinking),
+							signature: sig,
+						});
+					} else {
+						// No signature: replay as plain text or the API rejects it.
+						blocks.push({ type: "text", text: sanitizeSurrogates(block.thinking) });
+					}
+				} else if (block.type === "toolCall") {
+					blocks.push({
+						type: "tool_use",
+						id: block.id,
+						name: nameFor(block.name),
+						input: block.arguments ?? {},
+					});
+				}
+			}
+			if (blocks.length > 0) params.push({ role: "assistant", content: blocks });
+		} else if (msg.role === "toolResult") {
+			const toolResults: any[] = [
+				{
+					type: "tool_result",
+					tool_use_id: msg.toolCallId,
+					content: convertContentBlocks(msg.content),
+					is_error: msg.isError,
+				},
+			];
+			// Anthropic requires consecutive tool results to share one user turn.
+			let j = i + 1;
+			while (j < messages.length && messages[j].role === "toolResult") {
+				const next = messages[j] as ToolResultMessage;
+				toolResults.push({
+					type: "tool_result",
+					tool_use_id: next.toolCallId,
+					content: convertContentBlocks(next.content),
+					is_error: next.isError,
+				});
+				j++;
+			}
+			i = j - 1;
+			params.push({ role: "user", content: toolResults });
+		}
+	}
+
+	// Cache the tail of the conversation.
+	if (params.length > 0) {
+		const last = params[params.length - 1];
+		if (Array.isArray(last.content) && last.content.length > 0) {
+			last.content[last.content.length - 1].cache_control = { type: "ephemeral" };
+		}
+	}
+
+	return params;
+}
+
+function convertTools(tools: Tool[], isOAuth: boolean): unknown[] {
+	return tools.map((tool, idx) => {
+		const schema = (tool.parameters ?? {}) as any;
+		const entry: any = {
+			name: isOAuth ? applyClaudeToolPrefix(tool.name) : tool.name,
+			description: tool.description,
+			input_schema: {
+				type: "object",
+				properties: schema.properties ?? {},
+				required: schema.required ?? [],
+			},
+		};
+		// Cache the tool block: it is stable across a session.
+		if (idx === tools.length - 1) entry.cache_control = { type: "ephemeral" };
+		return entry;
+	});
+}
+
+function mapStopReason(reason: string | null | undefined): StopReason {
+	switch (reason) {
+		case "end_turn":
+		case "pause_turn":
+		case "stop_sequence":
+			return "stop";
+		case "max_tokens":
+			return "length";
+		case "tool_use":
+			return "toolUse";
+		default:
+			return "error";
+	}
+}
+
+function firstUserText(messages: Message[]): string {
+	for (const msg of messages) {
+		if (msg.role !== "user") continue;
+		if (typeof msg.content === "string") return msg.content;
+		const text = (msg.content as TextContent[]).find((c) => c.type === "text");
+		if (text?.text) return text.text;
+	}
+	return "";
+}
+
+/**
+ * Build system blocks in Cowork's order:
+ *   [0] billing header (carries the cch placeholder patched on the wire)
+ *   [1] Claude Agent SDK identity
+ *
+ * On OAuth the caller's own system prompt is deliberately NOT appended here —
+ * see `relocateSystemPromptForOAuth` for why and where it goes instead.
+ */
+function buildSystemBlocks(context: Context, isOAuth: boolean): unknown[] | undefined {
+	const userPrompt = context.systemPrompt ? sanitizeSurrogates(context.systemPrompt) : undefined;
+
+	if (!isOAuth) {
+		return userPrompt
+			? [{ type: "text", text: userPrompt, cache_control: { type: "ephemeral" } }]
+			: undefined;
+	}
+
+	const blocks: any[] = [
+		{ type: "text", text: createClaudeBillingHeader(firstUserText(context.messages)) },
+		{ type: "text", text: claudeCodeSystemInstruction },
+	];
+	blocks[1].cache_control = { type: "ephemeral" };
+	return blocks;
+}
+
+/**
+ * Move the harness's system prompt out of `system` and into a leading user turn,
+ * wrapped in `<system-reminder>`, for OAuth (subscription) requests only.
+ *
+ * WHY THIS EXISTS
+ * A subscription credential presenting the Claude Code / Cowork fingerprint is
+ * expected to carry a Claude-Code-shaped system prompt. pi's default prompt
+ * announces a different product ("operating inside pi, a coding agent harness",
+ * plus `docs/*.md` references and local `pi-coding-agent` paths). Sending that
+ * as a `system` block makes Anthropic bill the request against extra-usage
+ * credits instead of the plan, which surfaces as:
+ *
+ *   400 invalid_request_error
+ *   "You're out of extra usage. Add more at claude.ai/settings/usage…"
+ *
+ * Measured on a live credential (diagnostics/fix-probe.ts), same prompt text:
+ *
+ *   pi prompt as a system block                      -> 400
+ *   pi prompt in a <system-reminder> user turn        -> 200   <-- this strategy
+ *   pi prompt with every `pi` token renamed           -> 200   (mangles instructions)
+ *   pi prompt truncated before its docs section       -> 200   (loses instructions)
+ *
+ * The relocation is chosen because it is the only option that preserves the
+ * prompt **verbatim** — the model still receives every instruction, and omp
+ * itself delivers context this way (its own first user turn is a
+ * `<system-reminder>` block), so it matches the fingerprint rather than fighting
+ * it. Anthropic does not police user-turn content the way it polices system
+ * content: an 8000-char neutral system prompt passes, and a 2800-char user
+ * message passes, so this is about classification, not size.
+ *
+ * API-key requests are unaffected and keep the prompt in `system`.
+ */
+function relocateSystemPromptForOAuth(context: Context): Message[] {
+	const prompt = context.systemPrompt ? sanitizeSurrogates(context.systemPrompt) : "";
+	if (!prompt.trim()) return context.messages;
+
+	// A synthetic acknowledgement keeps the user/assistant alternation intact and
+	// stops the model from replying to the instructions themselves.
+	return [
+		{
+			role: "user",
+			content: `<system-reminder>\n${prompt}\n</system-reminder>`,
+		} as Message,
+		{
+			role: "assistant",
+			content: [{ type: "text", text: "Understood." }],
+		} as Message,
+		...context.messages,
+	];
+}
+
+const THINKING_BUDGETS: Record<string, number> = {
+	minimal: 1024,
+	low: 4096,
+	medium: 10240,
+	high: 20480,
+	xhigh: 32768,
+	max: 49152,
+};
+
+/** SSE line reader over the fetch body stream. */
+async function* iterateSse(
+	body: ReadableStream<Uint8Array>,
+): AsyncGenerator<{ event: string; data: any }> {
+	const reader = body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = "";
+	let eventName = "";
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		buffer += decoder.decode(value, { stream: true });
+
+		let idx: number;
+		while ((idx = buffer.indexOf("\n")) >= 0) {
+			const line = buffer.slice(0, idx).replace(/\r$/, "");
+			buffer = buffer.slice(idx + 1);
+
+			if (line === "") {
+				eventName = "";
+				continue;
+			}
+			if (line.startsWith("event:")) {
+				eventName = line.slice(6).trim();
+				continue;
+			}
+			if (line.startsWith("data:")) {
+				const raw = line.slice(5).trim();
+				if (!raw || raw === "[DONE]") continue;
+				try {
+					yield { event: eventName, data: JSON.parse(raw) };
+				} catch {
+					// Ignore malformed keep-alive fragments.
+				}
+			}
+		}
+	}
+}
+
+export interface OmpStreamConfig {
+	/** Extra anthropic-beta values to advertise. */
+	extraBetas?: string[];
+	/** Override the Cowork user-agent (debugging only). */
+	userAgent?: string;
+	/** Emit the resolved request headers/body to stderr. */
+	debug?: boolean;
+}
+
+export function createOmpAnthropicStream(config: OmpStreamConfig = {}) {
+	return function streamOmpAnthropic(
+		model: Model<any>,
+		context: Context,
+		options?: SimpleStreamOptions,
+	): AssistantMessageEventStream {
+		const stream = createAssistantMessageEventStream();
+
+		(async () => {
+			const output: AssistantMessage = {
+				role: "assistant",
+				content: [],
+				api: model.api,
+				provider: model.provider,
+				model: model.id,
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "pending",
+				timestamp: Date.now(),
+			};
+
+			try {
+				const apiKey = options?.apiKey ?? "";
+				const oauth = isOAuthToken(apiKey);
+				const hasTools = !!context.tools?.length;
+				const thinkingRequested = !!(options?.reasoning && model.reasoning);
+
+				// ---- headers (omp buildAnthropicHeaders, OAuth branch) ----
+				const betaHeader = buildBetaHeader(
+					oauth ? buildCoworkBetas(true, thinkingRequested) : [],
+					config.extraBetas ?? [],
+				);
+
+				const headers: Record<string, string> = oauth
+					? {
+							Accept: "application/json",
+							"Content-Type": "application/json",
+							"User-Agent": config.userAgent ?? coworkUserAgent,
+							...coworkHeaders,
+							...(betaHeader ? { "anthropic-beta": betaHeader } : {}),
+							"anthropic-dangerous-direct-browser-access": "true",
+							"anthropic-version": ANTHROPIC_VERSION,
+							Authorization: `Bearer ${apiKey}`,
+							"x-app": "cli",
+							"x-client-request-id": nodeCrypto.randomUUID(),
+							Connection: "keep-alive",
+							"Accept-Encoding": "gzip, deflate, br",
+						}
+					: {
+							Accept: "text/event-stream",
+							"Content-Type": "application/json",
+							"anthropic-version": ANTHROPIC_VERSION,
+							"anthropic-dangerous-direct-browser-access": "true",
+							...(betaHeader ? { "anthropic-beta": betaHeader } : {}),
+							"X-Api-Key": apiKey,
+						};
+
+				// Model-level headers may add new keys but must never clobber the
+				// fingerprint. omp calls these "enforced" keys and strips them from
+				// caller-supplied headers (anthropic.ts: enforcedHeaderKeys).
+				for (const [k, v] of Object.entries(model.headers ?? {})) {
+					if (ENFORCED_HEADER_KEYS.has(k.toLowerCase())) continue;
+					headers[k] = v as string;
+				}
+
+				// ---- max_tokens: omp clamps OAuth to 64k; pi does not ----
+				const modelMaxTokens = model.maxTokens ?? CLAUDE_CODE_MAX_OUTPUT_TOKENS;
+				const ceiling = oauth
+					? Math.min(CLAUDE_CODE_MAX_OUTPUT_TOKENS, modelMaxTokens)
+					: modelMaxTokens;
+				const maxTokens = Math.min(ceiling, options?.maxTokens ?? modelMaxTokens);
+
+				// On OAuth the harness prompt is relocated into a leading
+				// <system-reminder> user turn (see relocateSystemPromptForOAuth).
+				const outboundMessages = oauth
+					? relocateSystemPromptForOAuth(context)
+					: context.messages;
+
+				const body: Record<string, unknown> = {
+					model: model.id,
+					messages: convertMessages(outboundMessages, oauth),
+				};
+
+				const systemBlocks = buildSystemBlocks(context, oauth);
+				if (systemBlocks) body.system = systemBlocks;
+				if (hasTools) body.tools = convertTools(context.tools!, oauth);
+
+				if (oauth) {
+					body.metadata = { user_id: generateClaudeCloakingUserId() };
+				}
+
+				body.max_tokens = maxTokens;
+
+				if (thinkingRequested) {
+					const level = options!.reasoning as string;
+					const custom = (options?.thinkingBudgets as any)?.[level];
+					const budget = custom ?? THINKING_BUDGETS[level] ?? 10240;
+					body.thinking = {
+						type: "enabled",
+						// Anthropic requires budget_tokens < max_tokens.
+						budget_tokens: Math.max(1024, Math.min(budget, maxTokens - 1024)),
+					};
+				}
+
+				body.stream = true;
+
+				const baseUrl = (model.baseUrl ?? "https://api.anthropic.com").replace(/\/+$/, "");
+				const url = `${baseUrl}/v1/messages`;
+				const serialized = JSON.stringify(body);
+
+				if (config.debug) {
+					const redacted = { ...headers, Authorization: "Bearer sk-ant-oat***" };
+					process.stderr.write(
+						`[omp-anthropic] POST ${url}\nheaders=${JSON.stringify(redacted, null, 2)}\nmax_tokens=${maxTokens} oauth=${oauth} betas=${betaHeader}\n`,
+					);
+					// Full body dump for diffing against a known-good request.
+					// Credentials live in headers, not the body, so this is safe.
+					if (process.env.OMP_ANTHROPIC_DUMP_BODY) {
+						fs.writeFileSync(process.env.OMP_ANTHROPIC_DUMP_BODY, serialized);
+						process.stderr.write(
+							`[omp-anthropic] body -> ${process.env.OMP_ANTHROPIC_DUMP_BODY} (${serialized.length} bytes, ${(body.tools as unknown[])?.length ?? 0} tools)\n`,
+						);
+					}
+				}
+
+				// cch attestation is patched into the body bytes on the way out.
+				const doFetch = oauth
+					? wrapFetchForCch((options?.fetch as typeof fetch) ?? fetch)
+					: ((options?.fetch as typeof fetch) ?? fetch);
+
+				const response = await doFetch(url, {
+					method: "POST",
+					headers,
+					body: serialized,
+					signal: options?.signal,
+				});
+
+				if (!response.ok || !response.body) {
+					const errText = await response.text().catch(() => "");
+					throw new Error(`Anthropic API error ${response.status}: ${errText}`);
+				}
+
+				stream.push({ type: "start", partial: output });
+
+				type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson: string })) & {
+					index: number;
+				};
+				const blocks = output.content as unknown as Block[];
+
+				for await (const { data: event } of iterateSse(response.body)) {
+					if (event.type === "message_start") {
+						const usage = event.message?.usage ?? {};
+						output.usage.input = usage.input_tokens || 0;
+						output.usage.output = usage.output_tokens || 0;
+						output.usage.cacheRead = usage.cache_read_input_tokens || 0;
+						output.usage.cacheWrite = usage.cache_creation_input_tokens || 0;
+						output.usage.totalTokens =
+							output.usage.input +
+							output.usage.output +
+							output.usage.cacheRead +
+							output.usage.cacheWrite;
+						calculateCost(model, output.usage);
+					} else if (event.type === "content_block_start") {
+						const cb = event.content_block;
+						if (cb.type === "text") {
+							output.content.push({ type: "text", text: "", index: event.index } as any);
+							stream.push({
+								type: "text_start",
+								contentIndex: output.content.length - 1,
+								partial: output,
+							});
+						} else if (cb.type === "thinking" || cb.type === "redacted_thinking") {
+							output.content.push({
+								type: "thinking",
+								thinking: "",
+								thinkingSignature: "",
+								redacted: cb.type === "redacted_thinking" ? true : undefined,
+								index: event.index,
+							} as any);
+							stream.push({
+								type: "thinking_start",
+								contentIndex: output.content.length - 1,
+								partial: output,
+							});
+						} else if (cb.type === "tool_use") {
+							output.content.push({
+								type: "toolCall",
+								id: cb.id,
+								// Strip the `_` prefix omp added on the way out.
+								name: oauth ? stripClaudeToolPrefix(cb.name) : cb.name,
+								arguments: {},
+								partialJson: "",
+								index: event.index,
+							} as any);
+							stream.push({
+								type: "toolcall_start",
+								contentIndex: output.content.length - 1,
+								partial: output,
+							});
+						}
+					} else if (event.type === "content_block_delta") {
+						const index = blocks.findIndex((b) => b.index === event.index);
+						const block = blocks[index];
+						if (!block) continue;
+						const delta = event.delta;
+
+						if (delta.type === "text_delta" && block.type === "text") {
+							block.text += delta.text;
+							stream.push({
+								type: "text_delta",
+								contentIndex: index,
+								delta: delta.text,
+								partial: output,
+							});
+						} else if (delta.type === "thinking_delta" && block.type === "thinking") {
+							block.thinking += delta.thinking;
+							stream.push({
+								type: "thinking_delta",
+								contentIndex: index,
+								delta: delta.thinking,
+								partial: output,
+							});
+						} else if (delta.type === "signature_delta" && block.type === "thinking") {
+							block.thinkingSignature = (block.thinkingSignature ?? "") + delta.signature;
+						} else if (delta.type === "input_json_delta" && block.type === "toolCall") {
+							(block as any).partialJson += delta.partial_json;
+							stream.push({
+								type: "toolcall_delta",
+								contentIndex: index,
+								delta: delta.partial_json,
+								partial: output,
+							});
+						}
+					} else if (event.type === "content_block_stop") {
+						const index = blocks.findIndex((b) => b.index === event.index);
+						const block = blocks[index];
+						if (!block) continue;
+
+						if (block.type === "text") {
+							stream.push({
+								type: "text_end",
+								contentIndex: index,
+								content: block.text,
+								partial: output,
+							});
+						} else if (block.type === "thinking") {
+							stream.push({
+								type: "thinking_end",
+								contentIndex: index,
+								content: block.thinking,
+								partial: output,
+							});
+						} else if (block.type === "toolCall") {
+							const raw = (block as any).partialJson;
+							try {
+								block.arguments = raw ? JSON.parse(raw) : {};
+							} catch {
+								block.arguments = {};
+							}
+							delete (block as any).partialJson;
+							stream.push({
+								type: "toolcall_end",
+								contentIndex: index,
+								toolCall: block as ToolCall,
+								partial: output,
+							});
+						}
+					} else if (event.type === "message_delta") {
+						if (event.delta?.stop_reason) {
+							output.stopReason = mapStopReason(event.delta.stop_reason);
+						}
+						if (event.usage?.output_tokens) {
+							output.usage.output = event.usage.output_tokens;
+							output.usage.totalTokens =
+								output.usage.input +
+								output.usage.output +
+								output.usage.cacheRead +
+								output.usage.cacheWrite;
+							calculateCost(model, output.usage);
+						}
+					} else if (event.type === "error") {
+						throw new Error(event.error?.message ?? "Anthropic stream error");
+					}
+				}
+
+				for (const block of blocks) delete (block as any).index;
+
+				if (output.stopReason === "pending") {
+					throw new Error("Provider stream ended without a stop reason");
+				}
+				// pi's stream contract (docs/custom-provider.md) requires BOTH guards.
+				// mapStopReason() returns "error" for any stop_reason Anthropic adds
+				// that we don't recognise; without this, such a turn would be pushed
+				// as a successful `done` event and the agent would act on a failed
+				// response. Also what makes `reason` below provably a done-reason.
+				if (output.stopReason === "error" || output.stopReason === "aborted") {
+					throw new Error(output.errorMessage || "An unknown error occurred");
+				}
+
+				stream.push({ type: "done", reason: output.stopReason, message: output });
+				stream.end();
+			} catch (error) {
+				output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+				output.errorMessage = error instanceof Error ? error.message : String(error);
+				stream.push({ type: "error", reason: output.stopReason, error: output });
+				stream.end();
+			}
+		})();
+
+		return stream;
+	};
+}

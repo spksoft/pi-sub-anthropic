@@ -1,0 +1,9 @@
+# Dev-only symlink into pi's own node_modules so `@earendil-works/*` type
+# imports resolve. Recreate with: npm run link:dev
+node_modules/
+
+# Editor / OS noise
+.DS_Store
+*.log
+.idea/
+.vscode/
