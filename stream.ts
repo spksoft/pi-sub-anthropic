@@ -163,7 +163,11 @@ function convertMessages(messages: Message[], isOAuth: boolean): unknown[] {
 					blocks.push({ type: "text", text: sanitizeSurrogates(block.text) });
 				} else if (block.type === "thinking" && block.thinking.trim()) {
 					const sig = (block as ThinkingContent).thinkingSignature;
-					if (sig) {
+					// A signature only verifies if it was minted by an anthropic-messages
+					// call. History replayed across a provider swap (e.g. an OpenAI/Codex
+					// reasoning-item id landing here) carries a signature Anthropic can't
+					// verify and 400s on, so treat it the same as "no signature".
+					if (sig && msg.api === "anthropic-messages") {
 						blocks.push({
 							type: "thinking",
 							thinking: sanitizeSurrogates(block.thinking),
