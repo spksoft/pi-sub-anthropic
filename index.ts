@@ -36,7 +36,7 @@
  *
  * DIVERGENCES FROM pi 0.83.0's BUILT-IN ANTHROPIC PROVIDER
  *   token URL      api.anthropic.com/v1/oauth/token   (pi: platform.claude.com)
- *   user-agent     claude-cli/2.1.220 (external, claude-desktop)  (pi: claude-cli/2.1.75)
+ *   user-agent     claude-cli/2.1.280 (external, claude-desktop)  (pi: claude-cli/2.1.75)
  *   identity       "You are a Claude agent...Agent SDK"  (pi: "You are Claude Code...")
  *   max_tokens     clamped to 64k on OAuth              (pi: sends model.maxTokens)
  *   tool names     prefixed `_`                         (pi: renamed to Read/Write/Bash)

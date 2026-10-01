@@ -6,7 +6,7 @@
  *
  * Behaviours ported from omp that pi 0.83.0 does NOT do:
  *   1. max_tokens clamped to 64k on OAuth requests (pi sends model.maxTokens raw)
- *   2. Cowork user-agent `claude-cli/2.1.220 (external, claude-desktop)`
+ *   2. Cowork user-agent `claude-cli/2.1.280 (external, claude-desktop)`
  *   3. Cowork system identity ("You are a Claude agent, built on ... Agent SDK")
  *   4. Billing header + cch attestation as system[0]
  *   5. Tools prefixed with `_` instead of renamed to Read/Write/Bash/...

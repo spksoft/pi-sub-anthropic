@@ -113,7 +113,7 @@ const h = captured!.headers;
 const b = captured!.body;
 
 console.log("\n=== REQUEST HEADERS (omp fingerprint) ===");
-check("User-Agent is Cowork claude-desktop", h["user-agent"] === "claude-cli/2.1.220 (external, claude-desktop)", h["user-agent"]);
+check("User-Agent is Cowork claude-desktop", h["user-agent"] === "claude-cli/2.1.280 (external, claude-desktop)", h["user-agent"]);
 check("Authorization uses Bearer (not x-api-key)", (h.authorization ?? "").startsWith("Bearer sk-ant-oat01"));
 check("no x-api-key header on OAuth", h["x-api-key"] === undefined);
 check("x-app: cli", h["x-app"] === "cli");
@@ -201,7 +201,7 @@ console.log("\n=== HEADER ENFORCEMENT (model.headers must not clobber fingerprin
 		/* drain */
 	}
 	srv.close();
-	check("model.headers cannot override User-Agent", hijacked["user-agent"] === "claude-cli/2.1.220 (external, claude-desktop)", hijacked["user-agent"]);
+	check("model.headers cannot override User-Agent", hijacked["user-agent"] === "claude-cli/2.1.280 (external, claude-desktop)", hijacked["user-agent"]);
 	check("model.headers cannot override anthropic-beta", hijacked["anthropic-beta"] !== "evil-beta");
 	check("non-enforced custom header still passes through", hijacked["x-custom-allowed"] === "keepme");
 }

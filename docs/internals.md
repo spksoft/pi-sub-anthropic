@@ -19,7 +19,7 @@ inference directly against the subscription rather than an issued API key.
 Anthropic accepts a subscription token for inference only from a client that
 looks like Claude Code. This extension reproduces that appearance:
 
-- **User-agent** `claude-cli/2.1.220 (external, claude-desktop)`.
+- **User-agent** `claude-cli/2.1.280 (external, claude-desktop)`.
 - **System identity block** — "You are a Claude agent, built on Anthropic's
   Claude Agent SDK."
 - **`max_tokens` clamped to 64k on OAuth**, because Claude Code never requests
@@ -35,6 +35,14 @@ These constants live in `fingerprint.ts` and are transcribed from omp 17.4.2.
 They look like magic numbers because they are. `X-Stainless-OS` and
 `X-Stainless-Runtime-Version` deliberately do **not** describe your host — only
 `X-Stainless-Arch` is host-derived, matching omp.
+
+**Exception: the Claude Code version.** omp 17.4.2 pins `2.1.220`. Newer models
+reject that with a 400 `claude_code_version_too_old` (*"Claude Code 2.1.220 does
+not support this model; version 2.1.280 or newer is required"*), so
+`claudeCodeVersion` is bumped to `2.1.280`, the minimum the server named. The
+user-agent, the billing header's `cc_version` (and its derived suffix) and the
+bootstrap user-agent all derive from that single constant. If a future model
+names a higher minimum, bump the constant again.
 
 **1M-context betas are never advertised on OAuth.** Subscription credentials
 carry no long-context credit balance, so Anthropic hard-429s (*"Usage credits

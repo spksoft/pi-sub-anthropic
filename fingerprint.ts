@@ -19,7 +19,7 @@ import nodeCrypto from "node:crypto";
 // ---------------------------------------------------------------------------
 
 /** Claude runtime version bundled by the current Cowork desktop release. */
-export const claudeCodeVersion = "2.1.220";
+export const claudeCodeVersion = "2.1.280";
 
 /** User-Agent emitted by Cowork's `claude-desktop` inference entrypoint. */
 export const coworkUserAgent = `claude-cli/${claudeCodeVersion} (external, claude-desktop)`;
