@@ -124,10 +124,30 @@ request is 23885 bytes with 4 tools, and the model lists `_read`, `_bash`,
 `_edit`, `_write`. Anthropic's mid-conversation system message support is not
 used; everything collapses into the single leading `<system-reminder>` turn.
 
+## Thinking levels
+
+Two wire shapes, chosen by `compat.forceAdaptiveThinking` (same switch as pi's
+built-in provider):
+
+- **Adaptive models** (Fable, Opus >= 4.6, Sonnet >= 4.6):
+  `thinking: {type: "adaptive", display: "summarized"}` plus
+  `output_config: {effort}`. The effort comes from the model's
+  `thinkingLevelMap`, else `minimal`/`low` -> `low`, `medium` -> `medium`,
+  anything else -> `high`. Before this, these models were sent `budget_tokens`
+  and the catalog had no `thinkingLevelMap`, so pi never offered `xhigh`/`max`.
+- **Budget models** (Opus 4.5, Sonnet 4.5, Haiku 4.5): `thinking.enabled` with
+  `budget_tokens` from `THINKING_BUDGETS`, kept under `max_tokens`.
+
+Each model's `thinkingLevelMap` is copied from pi 0.99.2's anthropic catalog;
+`null` entries hide a level and pi clamps to the nearest one. Measured live on
+OAuth: `claude-opus-5-5` at `off`, `minimal`, `low`, `medium`, `high`, `xhigh`
+and `max` all return 200 (`off`/`minimal` arrive as `effort: "low"`), as do
+`claude-opus-4-6` at `max` and `claude-sonnet-4-5` at `high` (budget 20480).
+
 ## Ported scope
 
 **Ported:** streaming, OAuth login/refresh, the wire fingerprint, tool naming,
-thinking budgets.
+thinking budgets and adaptive effort.
 
 **Not ported:** Bedrock / Vertex / Copilot signing routes, fast-mode fallback,
 image resizing (`Bun.Image`), server-side fallbacks, structured outputs.

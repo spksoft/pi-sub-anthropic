@@ -96,8 +96,14 @@ To make it the default, in `~/.pi/agent/settings.json`:
 }
 ```
 
-Nine models are registered, mirroring pi's own Anthropic catalog: Opus 5 / 4.8 /
-4.7 / 4.6 / 4.5, Sonnet 5 / 4.6 / 4.5, Haiku 4.5.
+Thirteen models are registered, mirroring pi's own Anthropic catalog: Fable 5.1 /
+5, Opus 5.5 / 5 / 4.8 / 4.7 / 4.6 / 4.5, Sonnet 5.5 / 5 / 4.6 / 4.5, Haiku 4.5.
+
+Every thinking level pi's own Anthropic provider offers for a model is offered
+here too, including `xhigh` and `max` where the model supports them
+(`--thinking max`, or `/model pi-sub-anthropic/claude-opus-5-5:max`). Levels a
+model can't do (e.g. `off` on Opus 5.5) are hidden, and pi clamps to the nearest
+supported one.
 
 ## Two credentials, two behaviours
 

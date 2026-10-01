@@ -338,6 +338,49 @@ console.log("\n=== pi >= 0.99 TRANSCRIPT CONTEXT (prompt + tools in system messa
 	check("transcript: no role:system message on the wire", !(tBody?.messages ?? []).some((m: any) => m.role === "system"));
 }
 
+console.log("\n=== THINKING: adaptive effort vs budget ===");
+{
+	// Adaptive models (compat.forceAdaptiveThinking) take output_config.effort,
+	// with thinkingLevelMap carrying xhigh/max through; older models keep
+	// budget_tokens.
+	let eBody: any;
+	const srv6 = http.createServer((req, res) => {
+		let raw = "";
+		req.on("data", (c) => (raw += c));
+		req.on("end", () => {
+			eBody = JSON.parse(raw);
+			res.writeHead(200, { "Content-Type": "text/event-stream" });
+			res.end(SSE);
+		});
+	});
+	await new Promise<void>((r) => srv6.listen(0, "127.0.0.1", () => r()));
+	const p6 = (srv6.address() as any).port;
+	const adaptive = {
+		...model,
+		id: "claude-opus-5-5",
+		baseUrl: `http://127.0.0.1:${p6}`,
+		thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" },
+		compat: { forceAdaptiveThinking: true },
+	};
+	const run = async (m: any, reasoning: string) => {
+		const s = createPiSubAnthropicStream()(m, context, { apiKey: "sk-ant-oat01-FAKE", reasoning } as any);
+		for await (const _ of s) {
+			/* drain */
+		}
+		return eBody;
+	};
+
+	for (const level of ["low", "medium", "high", "xhigh", "max"]) {
+		const b6 = await run(adaptive, level);
+		check(`adaptive ${level}: effort=${level}, no budget`, b6?.output_config?.effort === level && b6?.thinking?.type === "adaptive" && b6?.thinking?.budget_tokens === undefined, JSON.stringify({ t: b6?.thinking, o: b6?.output_config }));
+	}
+	const unmapped = await run({ ...adaptive, thinkingLevelMap: undefined }, "minimal");
+	check("adaptive without map: minimal falls back to low", unmapped?.output_config?.effort === "low", unmapped?.output_config?.effort);
+	const budget = await run({ ...model, baseUrl: `http://127.0.0.1:${p6}` }, "high");
+	check("budget model: thinking.enabled + budget_tokens, no effort", budget?.thinking?.type === "enabled" && budget?.thinking?.budget_tokens === 20480 && budget?.output_config === undefined, JSON.stringify(budget?.thinking));
+	srv6.close();
+}
+
 console.log("\n=== RESPONSE PARSING ===");
 check("stream produced a done event", events.includes("done"), events.join(","));
 check("thinking captured", final?.content?.[0]?.thinking === "pondering");

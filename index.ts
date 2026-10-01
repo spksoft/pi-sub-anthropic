@@ -43,6 +43,7 @@
  *   extras         billing header + cch attestation, X-Stainless-*, bootstrap identity
  */
 
+import type { ThinkingLevelMap } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loginAnthropic, refreshAnthropicToken, type PiSubOAuthCredentials } from "./oauth.ts";
 import { createPiSubAnthropicStream } from "./stream.ts";
@@ -56,6 +57,8 @@ type ModelSpec = {
 	contextWindow: number;
 	maxTokens: number;
 	cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+	/** pi level -> Anthropic effort; null hides a level. Mirrors pi's anthropic catalog. */
+	thinkingLevelMap?: ThinkingLevelMap;
 	compat?: Record<string, unknown>;
 };
 
@@ -73,6 +76,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 },
+		thinkingLevelMap: { off: null, xhigh: "xhigh", max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
 	},
 	{
@@ -81,6 +85,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
+		thinkingLevelMap: { off: null, xhigh: "xhigh", max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
 	},
 	{
@@ -89,6 +94,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+		thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
 	},
 	{
@@ -97,6 +103,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+		thinkingLevelMap: { off: null, xhigh: "xhigh", max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
 	},
 	{
@@ -105,6 +112,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+		thinkingLevelMap: { xhigh: "xhigh", max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
 	},
 	{
@@ -113,6 +121,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+		thinkingLevelMap: { xhigh: "xhigh", max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
 	},
 	{
@@ -121,6 +130,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+		thinkingLevelMap: { max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsStrictTools: true },
 	},
 	{
@@ -137,6 +147,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+		thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
 	},
 	{
@@ -145,6 +156,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+		thinkingLevelMap: { xhigh: "xhigh", max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsStrictTools: true },
 	},
 	{
@@ -153,6 +165,7 @@ const MODELS: ModelSpec[] = [
 		contextWindow: 1000000,
 		maxTokens: 128000,
 		cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+		thinkingLevelMap: { max: "max" },
 		compat: { forceAdaptiveThinking: true, supportsStrictTools: true },
 	},
 	{
@@ -206,6 +219,7 @@ export default function (pi: ExtensionAPI) {
 			cost: m.cost,
 			contextWindow: m.contextWindow,
 			maxTokens: m.maxTokens,
+			thinkingLevelMap: m.thinkingLevelMap,
 			compat: m.compat as any,
 		})),
 	});

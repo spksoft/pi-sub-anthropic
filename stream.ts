@@ -352,6 +352,25 @@ const THINKING_BUDGETS: Record<string, number> = {
 	max: 49152,
 };
 
+/**
+ * pi thinking level -> Anthropic `output_config.effort` for adaptive models.
+ * The model's `thinkingLevelMap` wins (that is how `xhigh`/`max` reach the
+ * wire); otherwise the same fallback as pi's built-in anthropic provider.
+ */
+function mapThinkingLevelToEffort(model: Model<any>, level: string): string {
+	const mapped = (model.thinkingLevelMap as Record<string, string | null> | undefined)?.[level];
+	if (typeof mapped === "string") return mapped;
+	switch (level) {
+		case "minimal":
+		case "low":
+			return "low";
+		case "medium":
+			return "medium";
+		default:
+			return "high";
+	}
+}
+
 /** SSE line reader over the fetch body stream. */
 async function* iterateSse(
 	body: ReadableStream<Uint8Array>,
@@ -561,7 +580,13 @@ export function createPiSubAnthropicStream(config: PiSubStreamConfig = {}) {
 
 				body.max_tokens = maxTokens;
 
-				if (thinkingRequested) {
+				if (thinkingRequested && (model.compat as { forceAdaptiveThinking?: boolean } | undefined)?.forceAdaptiveThinking === true) {
+					// Adaptive models take an effort level, not a token budget.
+					// `display` defaults to "summarized" as in pi's own provider;
+					// newer models otherwise return thinking blocks with no text.
+					body.thinking = { type: "adaptive", display: "summarized" };
+					body.output_config = { effort: mapThinkingLevelToEffort(model, options!.reasoning as string) };
+				} else if (thinkingRequested) {
 					const level = options!.reasoning as string;
 					const custom = (options?.thinkingBudgets as any)?.[level];
 					const budget = custom ?? THINKING_BUDGETS[level] ?? 10240;
