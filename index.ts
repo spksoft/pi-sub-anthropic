@@ -22,7 +22,7 @@
  *
  * USAGE
  *   /login pi-sub-anthropic          # one-time OAuth (Claude Pro/Max subscription)
- *   /model pi-sub-anthropic/claude-opus-4-5
+ *   /model pi-sub-anthropic/claude-opus-5-5
  *
  *   # or with an API key instead (billed as API credits, not the plan):
  *   PI_SUB_ANTHROPIC_API_KEY=sk-ant-... pi
@@ -68,6 +68,30 @@ type ModelSpec = {
  */
 const MODELS: ModelSpec[] = [
 	{
+		id: "claude-fable-5-1",
+		name: "Claude Fable 5.1 (pi-sub)",
+		contextWindow: 1000000,
+		maxTokens: 128000,
+		cost: { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 },
+		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
+	},
+	{
+		id: "claude-fable-5",
+		name: "Claude Fable 5 (pi-sub)",
+		contextWindow: 1000000,
+		maxTokens: 128000,
+		cost: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
+		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
+	},
+	{
+		id: "claude-opus-5-5",
+		name: "Claude Opus 5.5 (pi-sub)",
+		contextWindow: 1000000,
+		maxTokens: 128000,
+		cost: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
+	},
+	{
 		id: "claude-opus-5",
 		name: "Claude Opus 5 (pi-sub)",
 		contextWindow: 1000000,
@@ -106,6 +130,14 @@ const MODELS: ModelSpec[] = [
 		maxTokens: 64000,
 		cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
 		compat: { supportsStrictTools: true },
+	},
+	{
+		id: "claude-sonnet-5-5",
+		name: "Claude Sonnet 5.5 (pi-sub)",
+		contextWindow: 1000000,
+		maxTokens: 128000,
+		cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
 	},
 	{
 		id: "claude-sonnet-5",

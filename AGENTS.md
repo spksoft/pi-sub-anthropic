@@ -30,7 +30,7 @@ versioning. Read `docs/internals.md` before making non-trivial changes.
 
 | path | role |
 |---|---|
-| `index.ts` | entry point: `pi.registerProvider("pi-sub-anthropic", …)` + 9-model catalog |
+| `index.ts` | entry point: `pi.registerProvider("pi-sub-anthropic", …)` + 13-model catalog |
 | `stream.ts` | Messages streaming over `fetch`: headers, 64k clamp, tool prefixing, SSE parsing, system-prompt relocation |
 | `fingerprint.ts` | pinned omp wire constants, beta profiles, billing header, pure-BigInt XXH64, `cch` patch |
 | `oauth.ts` | OAuth login/refresh (PKCE, callback port 54545) + bootstrap identity |

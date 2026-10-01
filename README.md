@@ -126,7 +126,7 @@ looks like that is documented in
 
 ## Troubleshooting
 
-**Is it installed?** `pi --list-models pi-sub-anthropic` lists 9 models, and a
+**Is it installed?** `pi --list-models pi-sub-anthropic` lists 13 models, and a
 real round-trip is `pi -p --provider pi-sub-anthropic --model claude-sonnet-5
 "hi"`.
 

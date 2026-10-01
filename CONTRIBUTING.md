@@ -169,7 +169,7 @@ the runtime check the workflow does not do, locally:
 ```bash
 npm pack --dry-run                                      # expect exactly 7 entries
 npm pack && tar xzf pi-sub-anthropic-*.tgz -C /tmp
-pi -ne -e /tmp/package --list-models pi-sub-anthropic   # 9 models, settings untouched
+pi -ne -e /tmp/package --list-models pi-sub-anthropic   # 13 models, settings untouched
 ```
 
 Do not parse `npm pack --json` with a fixed shape: npm <= 11 emits an array of
