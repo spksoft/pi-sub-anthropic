@@ -34,7 +34,7 @@ versioning. Read `docs/internals.md` before making non-trivial changes.
 | `stream.ts` | Messages streaming over `fetch`: headers, 64k clamp, tool prefixing, SSE parsing, system-prompt relocation |
 | `fingerprint.ts` | pinned omp wire constants, beta profiles, billing header, pure-BigInt XXH64, `cch` patch |
 | `oauth.ts` | OAuth login/refresh (PKCE, callback port 54545) + bootstrap identity |
-| `wire-test.ts` | 55 assertions against a mock Anthropic HTTP server; no credentials, no network |
+| `wire-test.ts` | 59 assertions against a mock Anthropic HTTP server; no credentials, no network |
 | `compare-bun.ts` / `verify-xxhash.ts` | XXH64 conformance (vs bun native / canonical vectors) |
 | `diagnostics/*.ts` | one-off probes that need a **live** credential; not part of `npm test` |
 | `scripts/link-dev.mjs` | symlinks `node_modules` at an installed pi |
@@ -43,7 +43,7 @@ versioning. Read `docs/internals.md` before making non-trivial changes.
 ## Commands
 
 ```bash
-npm test          # wire-test.ts  -> expect "55 passed, 0 failed"
+npm test          # wire-test.ts  -> expect "59 passed, 0 failed"
 npm run test:xxhash
 npm run test:bun  # needs bun
 npm run test:all

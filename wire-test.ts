@@ -278,6 +278,66 @@ console.log("\n=== API-KEY PATH IS UNAFFECTED BY THE OAUTH RELOCATION ===");
 	check("api-key: max_tokens keeps full model ceiling", apiKeyBody?.max_tokens === 128000, String(apiKeyBody?.max_tokens));
 }
 
+console.log("\n=== pi >= 0.99 TRANSCRIPT CONTEXT (prompt + tools in system messages) ===");
+{
+	// pi >= 0.99 drops `systemPrompt`/`tools` and carries them as `role: "system"`
+	// messages. Before the fold these went out as a request with zero tools and
+	// no pi prompt, so the model reported "I don't have any tools".
+	let tBody: any;
+	const srv5 = http.createServer((req, res) => {
+		let raw = "";
+		req.on("data", (c) => (raw += c));
+		req.on("end", () => {
+			tBody = JSON.parse(raw);
+			res.writeHead(200, { "Content-Type": "text/event-stream" });
+			res.end(SSE);
+		});
+	});
+	await new Promise<void>((r) => srv5.listen(0, "127.0.0.1", () => r()));
+	const p5 = (srv5.address() as any).port;
+
+	const transcript: any = {
+		messages: [
+			{
+				role: "system",
+				content: "Base prompt.",
+				sections: { env: "<env>old</env>", gone: "<gone/>" },
+				toolsAdded: context.tools,
+				timestamp: 1,
+			},
+			{ role: "user", content: "hi", timestamp: 2 },
+			{
+				role: "system",
+				content: [{ type: "text", text: "Later instruction." }],
+				sections: { env: "<env>new</env>", gone: null },
+				toolsAdded: [{ name: "grep", description: "Search", parameters: { properties: {}, required: [] } }],
+				toolsRemoved: [{ name: "bash" }],
+				timestamp: 3,
+			},
+		],
+	};
+	const s5 = createPiSubAnthropicStream()(
+		{ ...model, baseUrl: `http://127.0.0.1:${p5}` } as any,
+		transcript,
+		{ apiKey: "sk-ant-oat01-FAKE" } as any,
+	);
+	for await (const _ of s5) {
+		/* drain */
+	}
+	srv5.close();
+
+	const toolNames = (tBody?.tools ?? []).map((t: any) => t.name).join(",");
+	const reminder = String(tBody?.messages?.[0]?.content ?? "");
+	check("transcript: tools replayed (removal + addition)", toolNames === "_read_file,_grep", toolNames);
+	check("transcript: prompt relocated into <system-reminder>", reminder.startsWith("<system-reminder>\nBase prompt."), reminder.slice(0, 60));
+	check(
+		"transcript: content appended, sections patched in order",
+		reminder.includes("Base prompt.\n\nLater instruction.\n\n<env>new</env>") && !reminder.includes("<gone/>"),
+		reminder.slice(0, 120),
+	);
+	check("transcript: no role:system message on the wire", !(tBody?.messages ?? []).some((m: any) => m.role === "system"));
+}
+
 console.log("\n=== RESPONSE PARSING ===");
 check("stream produced a done event", events.includes("done"), events.join(","));
 check("thinking captured", final?.content?.[0]?.thinking === "pondering");

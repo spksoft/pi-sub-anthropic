@@ -104,6 +104,26 @@ Instruction-following through the relocation is verified end to end:
 `--append-system-prompt "reply with exactly the single word: BANANA"` returns
 `BANANA`, and a tool-driven read of a scratch file returns the token inside it.
 
+### pi >= 0.99: prompt and tools arrive as system messages
+
+pi 0.99 changed the provider contract. `streamSimple` now receives a
+`TranscriptContext` with no `systemPrompt` and no `tools`; both ride in
+`role: "system"` messages inside `messages` (a leading one, plus later ones that
+append content, patch named `sections` and add/remove tools). Reading the old
+fields, the provider sent a request with **zero tools and no pi prompt** —
+measured on pi 0.99.2 with `claude-opus-5-5`: a 724-byte body, `0 tools`, and the
+model answering "I don't have any tools available".
+
+`foldTranscriptSystemMessages` (stream.ts) replays those messages back into
+`systemPrompt` + `tools` before anything else runs, mirroring pi-ai's
+`getCurrentSystemMessage` / `getSystemMessageText`, so the relocation above then
+applies unchanged. It is written locally rather than imported because the pi-ai
+this package typechecks against predates the helpers, and a context without
+system messages (pi <= 0.98) passes through untouched. After the fold the same
+request is 23885 bytes with 4 tools, and the model lists `_read`, `_bash`,
+`_edit`, `_write`. Anthropic's mid-conversation system message support is not
+used; everything collapses into the single leading `<system-reminder>` turn.
+
 ## Ported scope
 
 **Ported:** streaming, OAuth login/refresh, the wire fingerprint, tool naming,

@@ -401,12 +401,73 @@ export interface PiSubStreamConfig {
 	debug?: boolean;
 }
 
+/**
+ * Shape of a pi >= 0.99 transcript system message. Declared locally because the
+ * pi-ai this package typechecks against predates it, and its replay helpers
+ * (`getCurrentSystemMessage` …) are not exported there either.
+ */
+type TranscriptSystemMessage = {
+	role: "system";
+	content: string | TextContent[];
+	sections?: Record<string, string | null>;
+	toolsAdded?: Tool[];
+	toolsRemoved?: { name: string }[];
+};
+
+/**
+ * Fold transcript system messages back into `systemPrompt` + `tools`.
+ *
+ * pi >= 0.99 hands providers a `TranscriptContext`: `systemPrompt` and `tools`
+ * are gone, and the prompt and tool set ride in `role: "system"` messages inside
+ * `messages` instead. Without this fold the request goes out with no tools and
+ * no pi prompt, and the model truthfully reports that it has no tools.
+ *
+ * Mirrors pi-ai's `getCurrentSystemMessage` + `getSystemMessageText`: every
+ * system message's content is appended in order, `sections` are patched by name
+ * (null removes), tools are replayed (removals then additions), and the rendered
+ * prompt is the content followed by the surviving sections. A context with no
+ * system messages (pi <= 0.98) is returned unchanged.
+ */
+export function foldTranscriptSystemMessages(context: Context): Context {
+	const all = context.messages as readonly { role: string }[];
+	if (!all.some((m) => m.role === "system")) return context;
+
+	const content: string[] = context.systemPrompt ? [context.systemPrompt] : [];
+	const sections = new Map<string, string>();
+	const tools = new Map<string, Tool>((context.tools ?? []).map((t) => [t.name, t]));
+	for (const m of all) {
+		if (m.role !== "system") continue;
+		const sys = m as TranscriptSystemMessage;
+		const text =
+			typeof sys.content === "string"
+				? sys.content
+				: sys.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+		if (text.length > 0) content.push(text);
+		for (const [name, value] of Object.entries(sys.sections ?? {})) {
+			if (value === null) sections.delete(name);
+			else sections.set(name, value);
+		}
+		for (const t of sys.toolsRemoved ?? []) tools.delete(t.name);
+		for (const t of sys.toolsAdded ?? []) tools.set(t.name, t);
+	}
+
+	const prompt = [content.join("\n\n"), ...sections.values()]
+		.filter((p) => p.length > 0)
+		.join("\n\n");
+	return {
+		systemPrompt: prompt || undefined,
+		messages: all.filter((m) => m.role !== "system") as Message[],
+		tools: tools.size > 0 ? [...tools.values()] : undefined,
+	};
+}
+
 export function createPiSubAnthropicStream(config: PiSubStreamConfig = {}) {
 	return function streamPiSubAnthropic(
 		model: Model<any>,
-		context: Context,
+		rawContext: Context,
 		options?: SimpleStreamOptions,
 	): AssistantMessageEventStream {
+		const context = foldTranscriptSystemMessages(rawContext);
 		const stream = createAssistantMessageEventStream();
 
 		(async () => {

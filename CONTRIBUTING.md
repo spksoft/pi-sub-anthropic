@@ -38,7 +38,7 @@ There are no runtime npm dependencies. The Messages API is spoken directly over
 | `oauth.ts` | OAuth login/refresh (PKCE, callback port 54545) + bootstrap identity |
 | `stream.ts` | Messages streaming: headers, token clamp, tool prefixing, SSE parsing, system-prompt relocation |
 | `fingerprint.ts` | pinned wire constants, beta profiles, billing header, XXH64, `cch` patch |
-| `wire-test.ts` | 55 assertions against a mock Anthropic HTTP server; no credentials, no network |
+| `wire-test.ts` | 59 assertions against a mock Anthropic HTTP server; no credentials, no network |
 | `compare-bun.ts` / `verify-xxhash.ts` | XXH64 conformance (vs bun native / canonical vectors) |
 | `diagnostics/*.ts` | one-off probes that need a **live** credential; not part of `npm test` |
 | `scripts/link-dev.mjs` | symlinks `node_modules` at an installed pi |
@@ -46,7 +46,7 @@ There are no runtime npm dependencies. The Messages API is spoken directly over
 ## Tests
 
 ```bash
-npm run test          # wire-test.ts   -> 55 passed, 0 failed
+npm run test          # wire-test.ts   -> 59 passed, 0 failed
 npm run test:xxhash   # canonical XXH64 vectors, seed 0
 npm run test:bun      # 836/836 match bun's native xxHash64  (needs bun)
 npm run test:all      # all three
