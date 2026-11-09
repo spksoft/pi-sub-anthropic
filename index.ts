@@ -71,6 +71,15 @@ type ModelSpec = {
  */
 const MODELS: ModelSpec[] = [
 	{
+		id: "claude-fable-5-2",
+		name: "Claude Fable 5.2 (pi-sub)",
+		contextWindow: 1000000,
+		maxTokens: 128000,
+		cost: { input: 8, output: 40, cacheRead: 0.2, cacheWrite: 10 },
+		thinkingLevelMap: { off: null, xhigh: "xhigh", max: "max" },
+		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
+	},
+	{
 		id: "claude-fable-5-1",
 		name: "Claude Fable 5.1 (pi-sub)",
 		contextWindow: 1000000,
