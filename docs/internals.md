@@ -19,7 +19,7 @@ inference directly against the subscription rather than an issued API key.
 Anthropic accepts a subscription token for inference only from a client that
 looks like Claude Code. This extension reproduces that appearance:
 
-- **User-agent** `claude-cli/2.1.280 (external, claude-desktop)`.
+- **User-agent** `claude-cli/2.1.290 (external, claude-desktop)`.
 - **System identity block** — "You are a Claude agent, built on Anthropic's
   Claude Agent SDK."
 - **`max_tokens` clamped to 64k on OAuth**, because Claude Code never requests
@@ -39,7 +39,9 @@ They look like magic numbers because they are. `X-Stainless-OS` and
 **Exception: the Claude Code version.** omp 17.4.2 pins `2.1.220`. Newer models
 reject that with a 400 `claude_code_version_too_old` (*"Claude Code 2.1.220 does
 not support this model; version 2.1.280 or newer is required"*), so
-`claudeCodeVersion` is bumped to `2.1.280`, the minimum the server named. The
+`claudeCodeVersion` was bumped to `2.1.280`, the minimum the server named.
+Fable 5.2 then rejected `2.1.280` the same way (*"version 2.1.290 or newer is
+required"*), so it is now `2.1.290`. The
 user-agent, the billing header's `cc_version` (and its derived suffix) and the
 bootstrap user-agent all derive from that single constant. If a future model
 names a higher minimum, bump the constant again.

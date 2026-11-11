@@ -36,7 +36,7 @@
  *
  * DIVERGENCES FROM pi 0.83.0's BUILT-IN ANTHROPIC PROVIDER
  *   token URL      api.anthropic.com/v1/oauth/token   (pi: platform.claude.com)
- *   user-agent     claude-cli/2.1.280 (external, claude-desktop)  (pi: claude-cli/2.1.75)
+ *   user-agent     claude-cli/2.1.290 (external, claude-desktop)  (pi: claude-cli/2.1.75)
  *   identity       "You are a Claude agent...Agent SDK"  (pi: "You are Claude Code...")
  *   max_tokens     clamped to 64k on OAuth              (pi: sends model.maxTokens)
  *   tool names     prefixed `_`                         (pi: renamed to Read/Write/Bash)
@@ -70,6 +70,15 @@ type ModelSpec = {
  * full ceiling.
  */
 const MODELS: ModelSpec[] = [
+	{
+		id: "claude-fable-5-2",
+		name: "Claude Fable 5.2 (pi-sub)",
+		contextWindow: 1000000,
+		maxTokens: 128000,
+		cost: { input: 8, output: 40, cacheRead: 0.2, cacheWrite: 10 },
+		thinkingLevelMap: { off: null, xhigh: "xhigh", max: "max" },
+		compat: { forceAdaptiveThinking: true, supportsTemperature: false, supportsStrictTools: true },
+	},
 	{
 		id: "claude-fable-5-1",
 		name: "Claude Fable 5.1 (pi-sub)",

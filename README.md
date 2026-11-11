@@ -96,8 +96,8 @@ To make it the default, in `~/.pi/agent/settings.json`:
 }
 ```
 
-Thirteen models are registered, mirroring pi's own Anthropic catalog: Fable 5.1 /
-5, Opus 5.5 / 5 / 4.8 / 4.7 / 4.6 / 4.5, Sonnet 5.5 / 5 / 4.6 / 4.5, Haiku 4.5.
+Fourteen models are registered, mirroring pi's own Anthropic catalog: Fable 5.2 /
+5.1 / 5, Opus 5.5 / 5 / 4.8 / 4.7 / 4.6 / 4.5, Sonnet 5.5 / 5 / 4.6 / 4.5, Haiku 4.5.
 
 Every thinking level pi's own Anthropic provider offers for a model is offered
 here too, including `xhigh` and `max` where the model supports them
@@ -132,7 +132,7 @@ looks like that is documented in
 
 ## Troubleshooting
 
-**Is it installed?** `pi --list-models pi-sub-anthropic` lists 13 models, and a
+**Is it installed?** `pi --list-models pi-sub-anthropic` lists 14 models, and a
 real round-trip is `pi -p --provider pi-sub-anthropic --model claude-sonnet-5
 "hi"`.
 
