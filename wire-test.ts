@@ -338,6 +338,59 @@ console.log("\n=== pi >= 0.99 TRANSCRIPT CONTEXT (prompt + tools in system messa
 	check("transcript: no role:system message on the wire", !(tBody?.messages ?? []).some((m: any) => m.role === "system"));
 }
 
+console.log("\n=== TOOL PAIRING: aborted turns and orphaned tool calls (issue #2) ===");
+{
+	// An abort mid-tool-call leaves an `aborted` assistant turn holding a tool_use
+	// with no result; replaying it 400s every later request. Partial results
+	// (one of two parallel calls answered) must be completed too.
+	let pBody: any;
+	const srv7 = http.createServer((req, res) => {
+		let raw = "";
+		req.on("data", (c) => (raw += c));
+		req.on("end", () => {
+			pBody = JSON.parse(raw);
+			res.writeHead(200, { "Content-Type": "text/event-stream" });
+			res.end(SSE);
+		});
+	});
+	await new Promise<void>((r) => srv7.listen(0, "127.0.0.1", () => r()));
+	const p7 = (srv7.address() as any).port;
+	const call = (id: string) => ({ type: "toolCall", id, name: "read_file", arguments: { path: "/a" } });
+	const broken: any = {
+		...context,
+		messages: [
+			{ role: "user", content: "go" },
+			{ role: "assistant", stopReason: "toolUse", content: [call("toolu_a"), call("toolu_b")] },
+			{ role: "toolResult", toolCallId: "toolu_a", content: [{ type: "text", text: "ok" }], isError: false },
+			{ role: "assistant", stopReason: "aborted", content: [{ type: "text", text: "let me" }, call("toolu_partial")] },
+			{ role: "user", content: "continue" },
+		],
+	};
+	const s7 = createPiSubAnthropicStream()(
+		{ ...model, baseUrl: `http://127.0.0.1:${p7}` } as any,
+		broken,
+		{ apiKey: "sk-ant-oat01-FAKE" } as any,
+	);
+	for await (const _ of s7) {
+		/* drain */
+	}
+	srv7.close();
+
+	const msgs: any[] = pBody?.messages ?? [];
+	const blocks = (m: any) => (Array.isArray(m?.content) ? m.content : []);
+	check("pairing: aborted turn not replayed", msgs.length > 0 && !JSON.stringify(msgs).includes("toolu_partial") && !JSON.stringify(msgs).includes("let me"));
+	// Anthropic's rule: each tool_use id needs a tool_result in the very next message.
+	const unpaired = msgs.flatMap((m, i) =>
+		blocks(m)
+			.filter((x: any) => x.type === "tool_use")
+			.filter((x: any) => !blocks(msgs[i + 1]).some((r: any) => r.type === "tool_result" && r.tool_use_id === x.id))
+			.map((x: any) => x.id),
+	);
+	check("pairing: every tool_use has a tool_result in the next message", unpaired.length === 0, unpaired.join(","));
+	const synthetic = msgs.flatMap(blocks).find((x: any) => x.type === "tool_result" && x.tool_use_id === "toolu_b");
+	check("pairing: missing result synthesized as an error", synthetic?.is_error === true && synthetic?.content === "No result provided", JSON.stringify(synthetic));
+}
+
 console.log("\n=== THINKING: adaptive effort vs budget ===");
 {
 	// Adaptive models (compat.forceAdaptiveThinking) take output_config.effort,
