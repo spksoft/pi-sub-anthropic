@@ -128,8 +128,52 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]): unknown 
 	return blocks;
 }
 
+/**
+ * The tool-pairing pass of pi-ai's `transformMessages`, which pi's built-in
+ * providers run and this one would otherwise skip. Aborted/errored assistant
+ * turns are not replayed (they can hold a half-streamed tool_use), and every
+ * tool call left without a result gets a synthetic error result. Without it,
+ * one abort mid-tool-call 400s every later request (issue #2). Local rather
+ * than imported: pi-ai only exposes it under an unstable `api/*` subpath.
+ */
+function repairToolPairing(messages: Message[]): Message[] {
+	const out: Message[] = [];
+	let pending: ToolCall[] = [];
+	const answered = new Set<string>();
+	const flush = () => {
+		for (const tc of pending) {
+			if (answered.has(tc.id)) continue;
+			out.push({
+				role: "toolResult",
+				toolCallId: tc.id,
+				toolName: tc.name,
+				content: [{ type: "text", text: "No result provided" }],
+				isError: true,
+				timestamp: Date.now(),
+			});
+		}
+		pending = [];
+		answered.clear();
+	};
+	for (const msg of messages) {
+		if (msg.role === "toolResult") {
+			answered.add(msg.toolCallId);
+		} else {
+			flush();
+			if (msg.role === "assistant") {
+				if (msg.stopReason === "aborted" || msg.stopReason === "error") continue;
+				pending = msg.content.filter((b): b is ToolCall => b.type === "toolCall");
+			}
+		}
+		out.push(msg);
+	}
+	flush();
+	return out;
+}
+
 /** Ported from omp's convertAnthropicMessages (tool naming differs from pi). */
-function convertMessages(messages: Message[], isOAuth: boolean): unknown[] {
+function convertMessages(rawMessages: Message[], isOAuth: boolean): unknown[] {
+	const messages = repairToolPairing(rawMessages);
 	const params: any[] = [];
 	const nameFor = (name: string) => (isOAuth ? applyClaudeToolPrefix(name) : name);
 

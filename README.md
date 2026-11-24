@@ -146,6 +146,12 @@ requests".** Subscription credentials carry no long-context credit, so 1M betas
 are never advertised on OAuth. Natively-1M models such as `claude-sonnet-5`
 still serve their full window; use an API key if you need a beta-gated 1M model.
 
+**Every request 400s with "`tool_use` ids were found without `tool_result`
+blocks" after stopping a turn.** Fixed in releases after 0.1.11: a stopped
+(aborted) turn is no longer replayed, and an interrupted tool call gets a
+placeholder result, as in pi's built-in providers. Update the package and send
+the next message again.
+
 **Requests started failing after working before.** The fingerprint is pinned and
 does not self-update. Check `PI_SUB_ANTHROPIC_DEBUG=1` output, then the
 [upstream constants](https://github.com/spksoft/pi-sub-anthropic/blob/main/docs/internals.md#why-the-fingerprint-exists).

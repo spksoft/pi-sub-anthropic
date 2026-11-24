@@ -126,6 +126,26 @@ request is 23885 bytes with 4 tools, and the model lists `_read`, `_bash`,
 `_edit`, `_write`. Anthropic's mid-conversation system message support is not
 used; everything collapses into the single leading `<system-reminder>` turn.
 
+## Tool-call pairing after an abort
+
+Anthropic rejects any `tool_use` without a `tool_result` in the next message.
+Stopping pi mid-tool-call saves an assistant turn with `stopReason: "aborted"`
+holding a partial `toolCall` and no result. Replayed as-is, every later request
+failed with `400 ... tool_use ids were found without tool_result blocks`, and
+the session could not recover
+([#2](https://github.com/spksoft/pi-sub-anthropic/issues/2)).
+
+pi's built-in providers avoid this by running history through pi-ai's
+`transformMessages`; this provider bypassed it. `repairToolPairing` (stream.ts)
+now applies that function's tool-pairing pass before conversion: `aborted` and
+`error` assistant turns are dropped, and any tool call still without a result
+when the next user/assistant turn (or the end) arrives gets a synthetic
+`is_error` result reading `No result provided`. The rest of
+`transformMessages` (cross-model thinking rewrites, image downgrade) is not
+applied, so the thinking-signature behaviour above is unchanged. It is local,
+not imported, because pi-ai only exposes it under the `api/*` subpath, which
+is not a stable export across pi versions.
+
 ## Thinking levels
 
 Two wire shapes, chosen by `compat.forceAdaptiveThinking` (same switch as pi's
